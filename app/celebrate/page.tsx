@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, Suspense } from "react";
 import { ArrowRight, Home } from "lucide-react";
 
 interface Particle {
@@ -250,6 +250,15 @@ function CelebrateContent() {
 
 export default function CelebratePage() {
   return (
-    <CelebrateContent />
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 text-6xl">🎉</div>
+          <p className="text-lg font-semibold text-[#6d6255]">Loading celebration...</p>
+        </div>
+      </div>
+    }>
+      <CelebrateContent />
+    </Suspense>
   );
 }
