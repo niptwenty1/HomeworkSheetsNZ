@@ -216,7 +216,7 @@ function CelebrateContent() {
               You&apos;ve shown dedication and commitment to your learning. Keep up the amazing progress!
             </p>
             <p className="text-base">
-              Every homework session brings you closer to mastering these skills.
+             Carry on with teh effort.
             </p>
           </div>
 
