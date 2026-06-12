@@ -217,7 +217,7 @@ function CelebrateContent() {
               You&apos;ve shown dedication and commitment to your learning. Keep up the amazing progress!
             </p>
             <p className="text-base">
-             Carry on with teh effort.
+             Carry on with the great effort.
             </p>
           </div>
 
@@ -229,13 +229,6 @@ function CelebrateContent() {
             >
               <Home className="h-5 w-5" />
               Back to Home
-            </button>
-            <button
-              onClick={() => router.push("/")}
-              className="tactile-button tactile-button-mint inline-flex min-h-14 items-center justify-center gap-2 rounded-[1.35rem] bg-[#a9d8d0] px-8 pb-4 pt-3 text-base font-black text-[#2a2722] transition"
-            >
-              More Worksheets
-              <ArrowRight className="h-5 w-5" />
             </button>
           </div>
 
