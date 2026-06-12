@@ -2,7 +2,7 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useRef, Suspense } from "react";
-import { ArrowRight, Home } from "lucide-react";
+import { Home } from "lucide-react";
 
 
 interface Particle {
