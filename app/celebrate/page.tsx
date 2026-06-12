@@ -22,7 +22,9 @@ export default function CelebratePage() {
   const particleIdRef = useRef(0);
 
   const studentName = searchParams.get("name") || "Student";
-  const completionDate = searchParams.get("date") || new Date().toLocaleDateString("en-NZ");
+  const completionDate =
+    searchParams.get("date") ||
+    new Date().toLocaleDateString("en-NZ");
 
   // Create firework burst
   const createFireworks = (x: number, y: number) => {
@@ -158,7 +160,7 @@ export default function CelebratePage() {
     const interval = setInterval(triggerCelebration, 2000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [createFireworks, createStars]);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     createFireworks(e.clientX, e.clientY);
