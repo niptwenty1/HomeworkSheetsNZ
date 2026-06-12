@@ -14,7 +14,7 @@ interface Particle {
   type: "firework" | "star";
 }
 
-export default function CelebratePage() {
+function CelebrateContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -245,5 +245,11 @@ export default function CelebratePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function CelebratePage() {
+  return (
+    <CelebrateContent />
   );
 }
