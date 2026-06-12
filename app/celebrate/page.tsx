@@ -28,6 +28,7 @@ function CelebrateContent() {
   const completionDate =
     searchParams.get("date") ||
     new Date().toLocaleDateString("en-NZ");
+  const signature = searchParams.get("sig") || "";
 
   // Register completion with Google Apps Script
   useEffect(() => {
@@ -40,6 +41,7 @@ function CelebrateContent() {
           name: studentName,
           year: studentYear,
           date: completionDate,
+          sig: signature,
         });
 
         await fetch(`${scriptUrl}?${params.toString()}`, {
@@ -56,7 +58,7 @@ function CelebrateContent() {
     if (studentEmail) {
       registerCompletion();
     }
-  }, [studentEmail, studentName, studentYear, completionDate]);
+  }, [studentEmail, studentName, studentYear, completionDate, signature]);
 
   // Create firework burst
   const createFireworks = useCallback((x: number, y: number) => {
