@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { ArrowRight, Home } from "lucide-react";
 
 interface Particle {
@@ -18,7 +18,6 @@ export default function CelebratePage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [particles, setParticles] = useState<Particle[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const particleIdRef = useRef(0);
 
@@ -120,7 +119,6 @@ export default function CelebratePage() {
         return true;
       });
 
-      setParticles([...particlesRef.current]);
       animationId = requestAnimationFrame(animate);
     };
 
