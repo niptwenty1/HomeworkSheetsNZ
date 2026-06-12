@@ -23,9 +23,40 @@ function CelebrateContent() {
   const particleIdRef = useRef(0);
 
   const studentName = searchParams.get("name") || "Student";
+  const studentEmail = searchParams.get("email") || "";
+  const studentYear = searchParams.get("year") || "";
   const completionDate =
     searchParams.get("date") ||
     new Date().toLocaleDateString("en-NZ");
+
+  // Register completion with Google Apps Script
+  useEffect(() => {
+    const registerCompletion = async () => {
+      try {
+        const scriptUrl = "https://script.google.com/macros/s/AKfycbxUd03x_9cudMmd_BaGjJEdUTjb3vEKlSoR8k1KB8CIQ4yTjNTrL8_s6D0K5hFw_PCu/exec";
+        
+        const params = new URLSearchParams({
+          email: studentEmail,
+          name: studentName,
+          year: studentYear,
+          date: completionDate,
+        });
+
+        const response = await fetch(`${scriptUrl}?${params.toString()}`, {
+          method: "GET",
+          mode: "no-cors",
+        });
+
+        console.log("Completion registered successfully");
+      } catch (error) {
+        console.error("Error registering completion:", error);
+      }
+    };
+
+    if (studentEmail) {
+      registerCompletion();
+    }
+  }, [studentEmail, studentName, studentYear, completionDate]);
 
   // Create firework burst
   const createFireworks = (x: number, y: number) => {
