@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useRef, Suspense } from "react";
+import { useEffect, useRef, useCallback, Suspense } from "react";
 import { Home } from "lucide-react";
 
 
@@ -42,7 +42,7 @@ function CelebrateContent() {
           date: completionDate,
         });
 
-        const response = await fetch(`${scriptUrl}?${params.toString()}`, {
+        await fetch(`${scriptUrl}?${params.toString()}`, {
           method: "GET",
           mode: "no-cors",
         });
@@ -59,7 +59,7 @@ function CelebrateContent() {
   }, [studentEmail, studentName, studentYear, completionDate]);
 
   // Create firework burst
-  const createFireworks = (x: number, y: number) => {
+  const createFireworks = useCallback((x: number, y: number) => {
     const newParticles: Particle[] = [];
     const burstCount = 30;
 
@@ -79,10 +79,10 @@ function CelebrateContent() {
     }
 
     particlesRef.current.push(...newParticles);
-  };
+  }, []);
 
   // Create floating stars
-  const createStars = (x: number, y: number) => {
+  const createStars = useCallback((x: number, y: number) => {
     const newParticles: Particle[] = [];
     const starCount = 8;
 
@@ -102,7 +102,7 @@ function CelebrateContent() {
     }
 
     particlesRef.current.push(...newParticles);
-  };
+  }, []);
 
   // Animation loop
   useEffect(() => {
