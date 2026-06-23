@@ -26,7 +26,26 @@ export const metadata: Metadata = {
     "Replace screen time with an exciting spy adventure. Secret Spy Academy keeps children aged 8-11 entertained while building critical thinking and problem-solving skills.",
 };
 
-const stripeLink = "https://buy.stripe.com/eVq6oG4Oe7sG6bwfa0g3600";
+const digitalCheckoutLink = process.env.SPY_ACADEMY_DIGITAL_CHECKOUT_URL ?? "";
+const printoutCheckoutLink = process.env.SPY_ACADEMY_PRINTOUT_CHECKOUT_URL ?? "";
+
+const products = [
+  {
+    name: "Spy Academy Workbook-Digital Download",
+    price: "$9.00",
+    description: "Instant PDF download to print at home and start the mission today.",
+    checkoutLink: digitalCheckoutLink,
+    tone: "bg-[#a9d8d0]",
+  },
+  {
+    name: "Spy Academy Workbook-Printout",
+    price: "$19.99",
+    description:
+      "A physical copy of the workbook delivered within 3-7 days using standard NZ Post.",
+    checkoutLink: printoutCheckoutLink,
+    tone: "bg-[#f5c666]",
+  },
+];
 
 const parentPainCards = [
   { title: "Screen-free", icon: Laptop, tone: "bg-[#a9d8d0]" },
@@ -119,14 +138,95 @@ function StripeButton({
 }) {
   return (
     <a
-      href={stripeLink}
-      target="_blank"
-      rel="noopener noreferrer"
+      href="#choose-product"
       className={`tactile-button inline-flex min-h-14 items-center justify-center gap-2 rounded-[1.35rem] bg-[#eea38c] px-6 pb-4 pt-3 text-base font-black text-[#2a2722] transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#a9d8d0]/70 ${className}`}
     >
       {children}
       <ArrowRight className="h-5 w-5" />
     </a>
+  );
+}
+
+function ProductChoiceModal() {
+  return (
+    <section
+      id="choose-product"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="choose-product-title"
+      className="fixed inset-0 z-50 hidden items-center justify-center bg-[#2a2722]/42 px-4 py-6 backdrop-blur-sm target:flex"
+    >
+      <a
+        href="#"
+        className="absolute inset-0"
+        aria-label="Close product chooser"
+      />
+      <div className="tactile-panel relative z-10 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[2rem] p-5 shadow-tactile sm:p-8">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-[#8d7c6b]">
+              Choose your mission
+            </p>
+            <h2
+              id="choose-product-title"
+              className="mt-2 text-3xl font-black leading-tight tracking-tight text-[#2a2722] sm:text-4xl"
+            >
+              Select your Spy Academy workbook
+            </h2>
+            <p className="mt-3 max-w-2xl text-base font-medium leading-7 text-[#6d6255]">
+              Pick the version that works best for your family, then continue to
+              Stripe to complete your purchase securely.
+            </p>
+          </div>
+          <a
+            href="#"
+            className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-[#fff8eb]/86 text-xl font-black text-[#2a2722] shadow-tactile transition hover:-translate-y-0.5"
+            aria-label="Close product chooser"
+          >
+            ×
+          </a>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {products.map((product) => (
+            <article
+              key={product.name}
+              className="rounded-[1.75rem] bg-white/62 p-5 shadow-tactile"
+            >
+              <span
+                className={`mb-5 flex h-14 w-14 items-center justify-center rounded-[1.2rem] ${product.tone} text-[#2a2722] soft-inset`}
+              >
+                <FileText className="h-7 w-7" />
+              </span>
+              <h3 className="text-2xl font-black leading-tight text-[#2a2722]">
+                {product.name}
+              </h3>
+              <p className="mt-3 text-4xl font-black tracking-tight text-[#2a2722]">
+                {product.price}
+              </p>
+              <p className="mt-3 text-base font-medium leading-7 text-[#6d6255]">
+                {product.description}
+              </p>
+              {product.checkoutLink ? (
+                <a
+                  href={product.checkoutLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tactile-button mt-6 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-[1.35rem] bg-[#eea38c] px-5 pb-4 pt-3 text-base font-black text-[#2a2722] transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#a9d8d0]/70"
+                >
+                  Buy Now
+                  <ArrowRight className="h-5 w-5" />
+                </a>
+              ) : (
+                <span className="mt-6 inline-flex min-h-14 w-full items-center justify-center rounded-[1.35rem] bg-[#fff8eb]/86 px-5 py-3 text-base font-black text-[#8d7c6b] shadow-tactile">
+                  Checkout unavailable
+                </span>
+              )}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -544,15 +644,14 @@ export default function SpyAcademyPage() {
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/70 bg-[#fff8eb]/92 p-3 shadow-[0_-18px_28px_-24px_rgba(80,68,54,0.65)] backdrop-blur sm:hidden">
         <a
-          href={stripeLink}
-          target="_blank"
-          rel="noopener noreferrer"
+          href="#choose-product"
           className="tactile-button inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-[1.35rem] bg-[#eea38c] px-5 pb-4 pt-3 text-base font-black text-[#2a2722] transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#a9d8d0]/70"
         >
           <Download className="h-5 w-5" />
           🕵️ Download Now
         </a>
       </div>
+      <ProductChoiceModal />
     </main>
   );
 }
