@@ -266,25 +266,6 @@ export default function Home() {
       <div className="pointer-events-none absolute left-[-4rem] top-28 h-44 w-44 rounded-full bg-[#eea38c]/28 blur-3xl" />
       <div className="pointer-events-none absolute right-[-5rem] top-[34rem] h-48 w-48 rounded-full bg-[#a9d8d0]/45 blur-3xl" />
 
-      <header className="px-4 pb-4 pt-5 sm:px-6">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between">
-          <a href="#top" className="flex items-center gap-3" aria-label="HomeWork App home">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#a9d8d0] text-lg font-black text-[#2a2722] shadow-mint">
-              H
-            </span>
-            <span className="text-base font-black tracking-tight text-[#2a2722]">
-              HomeWork Sheets
-            </span>
-          </a>
-          <a
-            href="#homework-signup"
-            className="rounded-2xl bg-[#fff8eb]/82 px-4 py-3 text-sm font-black text-[#2a2722] shadow-tactile transition active:translate-y-1"
-          >
-            Sign up
-          </a>
-        </nav>
-      </header>
-
       <section id="top" className="px-4 pb-12 pt-4 sm:px-6 sm:pb-16 lg:pt-8">
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
           <div className="space-y-6">
