@@ -32,12 +32,16 @@ const weekItems = [
 ];
 
 function HomeworkSignupForm() {
+  const parentNameId = useId();
   const childNameId = useId();
   const yearLevelId = useId();
   const emailId = useId();
+  const referrerNameId = useId();
+  const [parentName, setParentName] = useState("");
   const [childName, setChildName] = useState("");
   const [yearLevel, setYearLevel] = useState("");
   const [email, setEmail] = useState("");
+  const [referrerName, setReferrerName] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,8 +49,16 @@ function HomeworkSignupForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const cleanParentName = parentName.trim();
     const cleanName = childName.trim();
     const cleanEmail = email.trim();
+    const cleanReferrerName = referrerName.trim();
+
+    if (!cleanParentName) {
+      setSubmitted(false);
+      setError("Add your name so we know who the signup is for.");
+      return;
+    }
 
     if (!cleanName) {
       setSubmitted(false);
@@ -66,6 +78,12 @@ function HomeworkSignupForm() {
       return;
     }
 
+    // if (!cleanReferrerName) {
+    //   setSubmitted(false);
+    //   setError("Add the referrer's name.");
+    //   return;
+    // }
+
     setIsSubmitting(true);
     setError("");
     setSubmitted(false);
@@ -77,9 +95,11 @@ function HomeworkSignupForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          parentName: cleanParentName,
           childName: cleanName,
           yearLevel,
           email: cleanEmail,
+          referrerName: cleanReferrerName,
         }),
       });
 
@@ -87,9 +107,11 @@ function HomeworkSignupForm() {
         throw new Error("Signup request failed");
       }
 
+      setParentName("");
       setChildName("");
       setYearLevel("");
       setEmail("");
+      setReferrerName("");
       setSubmitted(true);
       setShowSuccessDialog(true);
     } catch {
@@ -101,6 +123,34 @@ function HomeworkSignupForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 text-left" noValidate>
+      <div>
+        <label
+          htmlFor={parentNameId}
+          className="mb-2 block text-sm font-black text-[#6d6255]"
+        >
+          Parent&apos;s name
+        </label>
+        <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
+          <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
+            <UserRound className="h-5 w-5 flex-none text-[#8d7c6b]" />
+            <input
+              id={parentNameId}
+              type="text"
+              value={parentName}
+              onChange={(event) => {
+                setParentName(event.target.value);
+                if (error) {
+                  setError("");
+                }
+              }}
+              placeholder="Your name"
+              className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
+              autoComplete="name"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label
@@ -190,6 +240,37 @@ function HomeworkSignupForm() {
               autoComplete="email"
               aria-describedby={`${emailId}-message`}
             />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+
+        <div>
+          <label
+            htmlFor={referrerNameId}
+            className="mb-2 block text-sm font-black text-[#6d6255]"
+          >
+            Referrer&apos;s name
+          </label>
+          <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
+            <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
+              <PencilLine className="h-5 w-5 flex-none text-[#8d7c6b]" />
+              <input
+                id={referrerNameId}
+                type="text"
+                value={referrerName}
+                onChange={(event) => {
+                  setReferrerName(event.target.value);
+                  if (error) {
+                    setError("");
+                  }
+                }}
+                placeholder="Name of the person who referred you"
+                className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
+                autoComplete="off"
+              />
+            </div>
           </div>
         </div>
       </div>
