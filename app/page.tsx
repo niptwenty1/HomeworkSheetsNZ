@@ -104,7 +104,11 @@ function HomeworkSignupForm() {
       });
 
       if (!response.ok) {
-        throw new Error("Signup request failed");
+        const result = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+
+        throw new Error(result?.error || "Signup request failed");
       }
 
       setParentName("");
@@ -114,8 +118,12 @@ function HomeworkSignupForm() {
       setReferrerName("");
       setSubmitted(true);
       setShowSuccessDialog(true);
-    } catch {
-      setError("Something went wrong. Please try again in a moment.");
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again in a moment.",
+      );
     } finally {
       setIsSubmitting(false);
     }
