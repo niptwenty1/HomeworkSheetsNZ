@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import {
   ArrowRight,
   Award,
@@ -28,6 +29,8 @@ export const metadata: Metadata = {
 
 const digitalCheckoutLink = process.env.SPY_ACADEMY_DIGITAL_CHECKOUT_URL ?? "";
 const printoutCheckoutLink = process.env.SPY_ACADEMY_PRINTOUT_CHECKOUT_URL ?? "";
+const previewPdfPath = "/spy-academy/secret-agent-academy-preview.pdf";
+const previewImagePath = "/spy-academy/secret-agent-academy-premium.jpg";
 
 const products = [
   {
@@ -447,14 +450,25 @@ export default function SpyAcademyPage() {
               <div>
                 <SectionIntro kicker="Workbook preview" title="Inside the mission files" />
                 <div className="rounded-[1.8rem] bg-[#fff8eb]/72 p-4 shadow-insetSoft">
-                  <div className="flex aspect-[16/11] items-center justify-center rounded-[1.35rem] border-2 border-dashed border-[#d9c4a3] bg-white/70">
-                    <div className="text-center">
-                      <FileText className="mx-auto h-14 w-14 text-[#d68972]" />
-                      <p className="mt-3 text-2xl font-black text-[#2a2722]">
-                        Workbook Preview
-                      </p>
-                    </div>
-                  </div>
+                  <a
+                    href={previewPdfPath}
+                    download
+                    aria-label="Download the Secret Agent Academy preview PDF"
+                    className="group relative mx-auto block max-w-sm overflow-hidden rounded-[1.35rem] bg-[#151a34] shadow-tactile transition hover:-translate-y-1 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#a9d8d0]/70 active:translate-y-0"
+                  >
+                    <Image
+                      src={previewImagePath}
+                      alt="Secret Agent Academy premium workbook cover"
+                      width={1414}
+                      height={2000}
+                      className="h-auto w-full"
+                      sizes="(min-width: 1024px) 360px, (min-width: 640px) 420px, calc(100vw - 64px)"
+                    />
+                    <span className="absolute bottom-4 left-4 right-4 inline-flex min-h-14 items-center justify-center gap-2 rounded-[1.2rem] bg-[#f5c666] px-5 py-3 text-center text-base font-black text-[#2a2722] shadow-button transition group-hover:-translate-y-0.5">
+                      <Download className="h-5 w-5" />
+                      Download Preview PDF
+                    </span>
+                  </a>
                 </div>
                 <div className="mt-4 grid gap-3">
                   {previewCards.map((card) => {

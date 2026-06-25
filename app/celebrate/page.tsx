@@ -34,7 +34,7 @@ function CelebrateContent() {
   useEffect(() => {
     const registerCompletion = async () => {
       try {
-        const scriptUrl = "https://script.google.com/macros/s/AKfycbxUd03x_9cudMmd_BaGjJEdUTjb3vEKlSoR8k1KB8CIQ4yTjNTrL8_s6D0K5hFw_PCu/exec";
+        const scriptUrl = "https://script.google.com/macros/s/AKfycbxow3XjpP8qX7RVWfX4dmkXt22WXoCMlUKBLVNmmfFX0xgzwHdfnDqE7PdlmyizoUTr/exec";
         
         const params = new URLSearchParams({
           email: studentEmail,
