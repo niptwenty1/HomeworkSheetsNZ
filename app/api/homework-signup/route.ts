@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     const sheetsResponse = await fetch(webhookUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "text/plain;charset=utf-8",
       },
       body: JSON.stringify({
         childName,
