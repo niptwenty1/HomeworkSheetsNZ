@@ -95,6 +95,18 @@ export async function POST(request: Request) {
       secret: webhookSecret,
     });
 
+     const signupPayload = {
+      childName,
+      yearLevel,
+      email,
+      parentName,
+      referrerName,
+      timestamp,
+      signature,
+    };
+
+    console.log("Signup payload before sending to Google Sheets:", signupPayload);
+
     const sheetsResponse = await fetch(webhookUrl, {
       method: "POST",
       headers: {
