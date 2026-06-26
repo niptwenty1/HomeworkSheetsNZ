@@ -32,12 +32,16 @@ const weekItems = [
 ];
 
 function HomeworkSignupForm() {
+  const parentNameId = useId();
   const childNameId = useId();
   const yearLevelId = useId();
   const emailId = useId();
+  const referrerNameId = useId();
+  const [parentName, setParentName] = useState("");
   const [childName, setChildName] = useState("");
   const [yearLevel, setYearLevel] = useState("");
   const [email, setEmail] = useState("");
+  const [referrerName, setReferrerName] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,8 +49,16 @@ function HomeworkSignupForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const cleanParentName = parentName.trim();
     const cleanName = childName.trim();
     const cleanEmail = email.trim();
+    const cleanReferrerName = referrerName.trim();
+
+    if (!cleanParentName) {
+      setSubmitted(false);
+      setError("Add your name so we know who the signup is for.");
+      return;
+    }
 
     if (!cleanName) {
       setSubmitted(false);
@@ -66,6 +78,12 @@ function HomeworkSignupForm() {
       return;
     }
 
+    // if (!cleanReferrerName) {
+    //   setSubmitted(false);
+    //   setError("Add the referrer's name.");
+    //   return;
+    // }
+
     setIsSubmitting(true);
     setError("");
     setSubmitted(false);
@@ -77,23 +95,35 @@ function HomeworkSignupForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          parentName: cleanParentName,
           childName: cleanName,
           yearLevel,
           email: cleanEmail,
+          referrerName: cleanReferrerName,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Signup request failed");
+        const result = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+
+        throw new Error(result?.error || "Signup request failed");
       }
 
+      setParentName("");
       setChildName("");
       setYearLevel("");
       setEmail("");
+      setReferrerName("");
       setSubmitted(true);
       setShowSuccessDialog(true);
-    } catch {
-      setError("Something went wrong. Please try again in a moment.");
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again in a moment.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -101,6 +131,34 @@ function HomeworkSignupForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 text-left" noValidate>
+      <div>
+        <label
+          htmlFor={parentNameId}
+          className="mb-2 block text-sm font-black text-[#6d6255]"
+        >
+          Parent&apos;s name
+        </label>
+        <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
+          <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
+            <UserRound className="h-5 w-5 flex-none text-[#8d7c6b]" />
+            <input
+              id={parentNameId}
+              type="text"
+              value={parentName}
+              onChange={(event) => {
+                setParentName(event.target.value);
+                if (error) {
+                  setError("");
+                }
+              }}
+              placeholder="Your name"
+              className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
+              autoComplete="name"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label
@@ -194,6 +252,37 @@ function HomeworkSignupForm() {
         </div>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+
+        <div>
+          <label
+            htmlFor={referrerNameId}
+            className="mb-2 block text-sm font-black text-[#6d6255]"
+          >
+            Referrer&apos;s name
+          </label>
+          <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
+            <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
+              <PencilLine className="h-5 w-5 flex-none text-[#8d7c6b]" />
+              <input
+                id={referrerNameId}
+                type="text"
+                value={referrerName}
+                onChange={(event) => {
+                  setReferrerName(event.target.value);
+                  if (error) {
+                    setError("");
+                  }
+                }}
+                placeholder="Name of the person who referred you"
+                className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
+                autoComplete="off"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <button
         type="submit"
         disabled={isSubmitting}
@@ -265,25 +354,6 @@ export default function Home() {
     <main className="relative min-h-screen overflow-hidden">
       <div className="pointer-events-none absolute left-[-4rem] top-28 h-44 w-44 rounded-full bg-[#eea38c]/28 blur-3xl" />
       <div className="pointer-events-none absolute right-[-5rem] top-[34rem] h-48 w-48 rounded-full bg-[#a9d8d0]/45 blur-3xl" />
-
-      <header className="px-4 pb-4 pt-5 sm:px-6">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between">
-          <a href="#top" className="flex items-center gap-3" aria-label="HomeWork App home">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#a9d8d0] text-lg font-black text-[#2a2722] shadow-mint">
-              H
-            </span>
-            <span className="text-base font-black tracking-tight text-[#2a2722]">
-              HomeWork Sheets
-            </span>
-          </a>
-          <a
-            href="#homework-signup"
-            className="rounded-2xl bg-[#fff8eb]/82 px-4 py-3 text-sm font-black text-[#2a2722] shadow-tactile transition active:translate-y-1"
-          >
-            Sign up
-          </a>
-        </nav>
-      </header>
 
       <section id="top" className="px-4 pb-12 pt-4 sm:px-6 sm:pb-16 lg:pt-8">
         <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">

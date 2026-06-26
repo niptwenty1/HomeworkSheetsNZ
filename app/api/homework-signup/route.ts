@@ -5,6 +5,8 @@ type SignupPayload = {
   childName?: unknown;
   yearLevel?: unknown;
   email?: unknown;
+  parentName?: unknown;
+  referrerName?: unknown;
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -56,8 +58,10 @@ export async function POST(request: Request) {
   const yearLevel =
     typeof payload.yearLevel === "string" ? payload.yearLevel.trim() : "";
   const email = typeof payload.email === "string" ? payload.email.trim() : "";
+  const parentName = typeof payload.parentName === "string" ? payload.parentName.trim() : "";
+  const referrerName = typeof payload.referrerName === "string" ? payload.referrerName.trim() : "";
 
-  if (!childName || !validYearLevels.has(yearLevel) || !emailPattern.test(email)) {
+  if (!childName || !parentName ||  !validYearLevels.has(yearLevel) || !emailPattern.test(email)) {
     return NextResponse.json(
       { ok: false, error: "Missing or invalid signup details" },
       { status: 400 },
@@ -100,26 +104,34 @@ export async function POST(request: Request) {
         childName,
         yearLevel,
         email,
+        parentName,
+        referrerName,
         timestamp,
         signature,
       }),
     });
 
+    const sheetsText = await sheetsResponse.text();
+
     if (!sheetsResponse.ok) {
-      throw new Error("Apps Script request failed");
+      throw new Error(
+        `Apps Script request failed (${sheetsResponse.status}): ${sheetsText || sheetsResponse.statusText}`,
+      );
     }
 
-    const sheetsText = await sheetsResponse.text();
     const sheetsResult = JSON.parse(sheetsText) as { ok?: boolean };
 
     if (!sheetsResult.ok) {
-      throw new Error("Apps Script rejected the signup details");
+      throw new Error(
+        `Apps Script rejected the signup details: ${sheetsText}`,
+      );
     }
 
     return NextResponse.json({ ok: true });
   } catch {
+
     return NextResponse.json(
-      { ok: false, error: "Could not save signup details" },
+      { ok: false, error: "Unable to process signup request. Please try again later." },
       { status: 502 },
     );
   }
