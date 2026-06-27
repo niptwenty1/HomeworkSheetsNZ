@@ -34,8 +34,9 @@ function CelebrateContent() {
   useEffect(() => {
     const registerCompletion = async () => {
       try {
-        const scriptUrl = "https://script.google.com/macros/s/AKfycbxow3XjpP8qX7RVWfX4dmkXt22WXoCMlUKBLVNmmfFX0xgzwHdfnDqE7PdlmyizoUTr/exec";
-        
+         
+        const scriptUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
+       
         const params = new URLSearchParams({
           email: studentEmail,
           name: studentName,
