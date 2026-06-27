@@ -105,7 +105,7 @@ export async function POST(request: Request) {
       signature,
     };
 
-    console.log("Signup payload before sending to Google Sheets:", signupPayload);
+    console.log("Signup payload before sending to Google Sheets:", JSON.stringify(signupPayload));
 
     const sheetsResponse = await fetch(webhookUrl, {
       method: "POST",
