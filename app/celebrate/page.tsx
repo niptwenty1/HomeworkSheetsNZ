@@ -29,35 +29,34 @@ function CelebrateContent() {
     new Date().toLocaleDateString("en-NZ");
   const signature = searchParams.get("sig") || "";
 
-  // Register completion with Google Apps Script
-  useEffect(() => {
-    const registerCompletion = async () => {
-      try {
-         
-        const scriptUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
-       
-        const params = new URLSearchParams({
+ // replace the existing registerCompletion useEffect with this:
+useEffect(() => {
+  const registerCompletion = async () => {
+    try {
+      const res = await fetch("/api/register-completion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           email: studentEmail,
           name: studentName,
           date: completionDate,
           sig: signature,
-        });
+        }),
+      });
 
-        await fetch(`${scriptUrl}?${params.toString()}`, {
-          method: "GET",
-          mode: "no-cors",
-        });
-
-        console.log("Completion registered successfully");
-      } catch (error) {
-        console.error("Error registering completion:", error);
+      const data = await res.json();
+      if (!res.ok) {
+        console.error("Register failed:", data);
+      } else {
+        console.log("Completion registered successfully:", data);
       }
-    };
-
-    if (studentEmail) {
-      registerCompletion();
+    } catch (error) {
+      console.error("Error registering completion:", error);
     }
-  }, [studentEmail, studentName, completionDate, signature]);
+  };
+
+  if (studentEmail) registerCompletion();
+}, [studentEmail, studentName, completionDate, signature]);
 
   // Create firework burst
   const createFireworks = useCallback((x: number, y: number) => {
