@@ -24,7 +24,6 @@ function CelebrateContent() {
 
   const studentName = searchParams.get("name") || "Student";
   const studentEmail = searchParams.get("email") || "";
-  const studentYear = searchParams.get("year") || "";
   const completionDate =
     searchParams.get("date") ||
     new Date().toLocaleDateString("en-NZ");
@@ -40,7 +39,6 @@ function CelebrateContent() {
         const params = new URLSearchParams({
           email: studentEmail,
           name: studentName,
-          year: studentYear,
           date: completionDate,
           sig: signature,
         });
@@ -59,7 +57,7 @@ function CelebrateContent() {
     if (studentEmail) {
       registerCompletion();
     }
-  }, [studentEmail, studentName, studentYear, completionDate, signature]);
+  }, [studentEmail, studentName, completionDate, signature]);
 
   // Create firework burst
   const createFireworks = useCallback((x: number, y: number) => {
