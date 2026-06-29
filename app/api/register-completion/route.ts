@@ -25,7 +25,8 @@ function verifySignature({ email, name, date, sig, secret }: { email: string; na
       return true;
     }
   } catch (e) {
-    // fall through to false
+    // fallconsole through to false
+    console.error("Error verifying signature:", e);
   }
 
   return false;

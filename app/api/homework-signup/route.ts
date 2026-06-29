@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import getSupabaseServerClient from "../../lib/supabaseServer";
 
