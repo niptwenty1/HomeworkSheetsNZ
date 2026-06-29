@@ -1,5 +1,6 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import getSupabaseServerClient from "../../lib/supabaseServer";
 
 type SignupPayload = {
   childName?: unknown;
@@ -8,6 +9,14 @@ type SignupPayload = {
   parentName?: unknown;
   referrerName?: unknown;
 };
+
+function verifySecretHeader(headerValue: string | null, secret: string) {
+  if (!headerValue) return false;
+  const headerBuffer = Buffer.from(headerValue, "utf8");
+  const secretBuffer = Buffer.from(secret, "utf8");
+  if (headerBuffer.length !== secretBuffer.length) return false;
+  return timingSafeEqual(headerBuffer, secretBuffer);
+}
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const validYearLevels = new Set([
@@ -23,23 +32,6 @@ const validYearLevels = new Set([
   "10",
 ]);
 
-function signPayload({
-  childName,
-  yearLevel,
-  email,
-  timestamp,
-  secret,
-}: {
-  childName: string;
-  yearLevel: string;
-  email: string;
-  timestamp: number;
-  secret: string;
-}) {
-  const message = JSON.stringify([timestamp, childName, yearLevel, email]);
-
-  return createHmac("sha256", secret).update(message).digest("hex");
-}
 
 export async function POST(request: Request) {
   let payload: SignupPayload;
@@ -68,75 +60,46 @@ export async function POST(request: Request) {
     );
   }
 
-  const webhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
-  const webhookSecret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET;
+  const signupSecret = process.env.HOMEWORK_SIGNUP_SECRET;
+  const headerSecret = request.headers.get("x-homework-signup-key");
 
-  if (!webhookUrl) {
+  if (!signupSecret || !verifySecretHeader(headerSecret, signupSecret)) {
     return NextResponse.json(
-      { ok: false, error: "Google Sheets webhook is not configured" },
-      { status: 500 },
+      { ok: false, error: "Unauthorized" },
+      { status: 401 },
     );
   }
 
-  if (!webhookSecret) {
+  // Ensure Supabase is configured
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
     return NextResponse.json(
-      { ok: false, error: "Google Sheets webhook secret is not configured" },
+      { ok: false, error: "Supabase is not configured" },
       { status: 500 },
     );
   }
 
   try {
     const timestamp = Date.now();
-    const signature = signPayload({
-      childName,
-      yearLevel,
-      email,
-      timestamp,
-      secret: webhookSecret,
-    });
 
-     const signupPayload = {
-      childName,
-      yearLevel,
+    const signupPayload = {
+      child_name: childName,
+      year_level: yearLevel,
       email,
-      parentName,
-      referrerName,
-      timestamp,
-      signature,
+      parent_name: parentName,
+      referrer_name: referrerName,
+      created_at: new Date(timestamp).toISOString(),
     };
 
-    console.log("Signup payload before sending to Google Sheets:", JSON.stringify(signupPayload));
 
-    const sheetsResponse = await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      body: JSON.stringify({
-        childName,
-        yearLevel,
-        email,
-        parentName,
-        referrerName,
-        timestamp,
-        signature,
-      }),
-    });
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase.from("signups").insert([signupPayload]);
 
-    const sheetsText = await sheetsResponse.text();
-
-    if (!sheetsResponse.ok) {
-      throw new Error(
-        `Apps Script request failed (${sheetsResponse.status}): ${sheetsText || sheetsResponse.statusText}`,
-      );
-    }
-
-    const sheetsResult = JSON.parse(sheetsText) as { ok?: boolean };
-
-    if (!sheetsResult.ok) {
-      throw new Error(
-        `Apps Script rejected the signup details: ${sheetsText}`,
-      );
+    if (error) {
+      console.error("Supabase insert error:", error);
+      throw new Error(`Supabase insert failed: ${error.message}`);
     }
 
     return NextResponse.json({ ok: true });
