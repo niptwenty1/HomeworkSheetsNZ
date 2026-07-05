@@ -1,0 +1,170 @@
+# HomeWorksheets — Apps Script → Next.js + Supabase migration
+
+This repo contains the migration of the original Google Apps Script homework workflow into the Next.js app. The goal was to move generation, persistence and sending into the app and Supabase, and to run scheduled jobs on Vercel.
+
+This README summarizes what changed, how the pieces fit together, the database schema, the server routes you can call, example requests, environment variables, and suggested cron schedules.
+
+---
+
+## High-level overview
+
+- Frontend: remains the Next.js app (signup page, public pages).
+- Backend / generation: server-side Claude call now lives in `app/lib/homeworkGeneration.ts` and is triggered by `POST /api/homework/generate-weekly`.
+- Persistence: Supabase now stores students, curriculum, generated homework and send logs.
+- Sending: emails are sent using Resend via `app/lib/email.ts`.
+- Cron: Vercel scheduled routes call the server routes to generate and send homework.
+ - Resend/Retry: resends are now flagged on the `signups` row (`resend` boolean and optional `resend_date`, `resend_reason`). The resend API marks a student for resend and the processor cron reads `signups` where `resend = true`.
+
+---
+
+## Files of interest
+
+- `app/lib/homeworkGeneration.ts` — builds the Claude prompt and calls the Claude API, unchanged prompt logic.
+- `app/lib/supabaseHomeworkData.ts` — Supabase helpers (students, curriculum, homework rows, sent email logging, resend helpers).
+- `app/lib/homeworkEmail.ts` — builds HTML email and completion signature.
+- `app/lib/email.ts` — small Resend HTTP client wrapper.
+- `app/api/homework/generate-weekly/route.ts` — server route that triggers Claude and saves rows to Supabase.
+- `app/api/cron/send-homework/route.ts` — cron route that finds today's homework and sends emails to students.
+- `app/api/homework/resend/route.ts` — API to enqueue a resend request for a specific student/date.
+- `app/api/cron/process-resends/route.ts` — cron route that processes pending resends.
+- `db/supabase_tables.sql` — SQL schema additions: `homework_entries`, `sent_emails`, `curriculum_items` (and updated `signups`, `completions`). Note: `resend_requests` has been removed and resends are now flagged on `signups`.
+
+---
+
+## Supabase tables
+
+- `signups` — students (child_name, email, year_level, difficulty_level, days, ...) now include resend fields: `resend` (boolean), `resend_date` (text), `resend_reason` (text), `resend_requested_at` (timestamptz)
+- `homework_entries` — generated homework rows; columns match spreadsheet headers:
+  - `date`, `day`, `maths_topic`, `maths_instructions`, `maths_questions` (array), `maths_word_problem`, `reading_title`, `reading_text`, `reading_questions` (array), `writing_type`, `writing_prompt`, `writing_word_count`, `grammar_topic`, `grammar_instruction`, `grammar_exercise`, `year_level`, `generated_at`
+- `sent_emails` — records of send attempts: `email`, `name`, `year`, `date`, `status`, `provider_response`, `created_at`
+- `curriculum_items` — migrated curriculum content (used by the Claude prompt)
+- `completions` — previously existing table used when students click completion link
+
+---
+
+## Environment variables
+
+Set the following in your deployment environment and in `.env` for local testing. Keep secrets secret.
+
+- `SUPABASE_URL` — your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` — service role key for server operations
+- `RESEND_API_KEY` — your Resend API key
+- `FROM_EMAIL` — sender email (used in the `From` field)
+- `REPLY_TO_EMAIL` — reply-to address
+- `CRON_SECRET` — secret used by cron routes to authorize Vercel scheduled calls
+- `HOMEWORK_SIGNUP_SECRET` — existing secret used for protected teacher actions (also used for enqueueing resends)
+- `COMPLETE_SECRET_KEY` — secret used to sign completion links (used by `app/api/register-completion/route.ts`)
+- `COMPLETION_WEB_APP_URL` — base URL students are redirected to when they click the completion link
+- `CLAUDE_API_KEY` (or `ANTHROPIC_API_KEY`) — Claude / Anthropic API key
+- `CLAUDE_MODEL` and `CLAUDE_MAX_TOKENS` — optional model/tokens settings
+
+---
+
+## API routes & usage
+
+All routes expect JSON where applicable and are protected with the appropriate secret (see examples).
+
+- `POST /api/homework/generate-weekly`
+  - Purpose: Generate a week's homework for a `yearLevel` and store it in Supabase.
+  - Payload example:
+    ```json
+    { "yearLevel": "6", "referenceDate": "2026-07-04" }
+    ```
+  - Headers: `x-cron-secret: <CRON_SECRET>` (route verifies secret)
+  - Response: `{ ok: true, count: <rows written> }`
+
+- `POST /api/cron/send-homework`
+  - Purpose: Send today's homework to all eligible students (reads `signups` and `homework_entries`).
+  - Payload: optional `{ "date": "2026-07-03" }` to run for a specific date.
+  - Headers: `x-cron-secret: <CRON_SECRET>`
+  - Response: summary of prepared/sent emails, e.g. `{ ok: true, date: "2026-07-03", count: 12, sends: [...] }`
+
+-- `POST /api/homework/resend`
+  - Purpose: Flag a student for a resend (sets `signups.resend = true`) so the processor cron will resend the homework.
+  - Payload example:
+    ```json
+    { "email": "family@example.com", "date": "2026-07-01", "reason": "bounced" }
+    ```
+  - Headers: `x-homework-signup-key: <HOMEWORK_SIGNUP_SECRET>` (or `x-cron-secret` depending on your configuration)
+  - Response: `{ ok: true }` on success
+
+-- `POST /api/cron/process-resends`
+  - Purpose: Process students flagged with `resend = true` in `signups`, perform sends, log results, and clear the flag.
+  - Headers: `x-cron-secret: <CRON_SECRET>`
+  - Response: `{ ok: true, processed: <n>, results: [...] }`
+
+---
+
+## Example commands
+
+- Run app locally (from project root):
+```bash
+npm install
+npm run dev
+```
+
+- TypeScript check:
+```bash
+npx tsc --noEmit
+```
+
+- Trigger weekly generation (manual):
+```bash
+curl -X POST https://<your-deploy>/api/homework/generate-weekly \
+  -H "x-cron-secret: <CRON_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{"yearLevel":"6","referenceDate":"2026-07-04"}'
+```
+
+- Trigger daily send (manual):
+```bash
+curl -X POST https://<your-deploy>/api/cron/send-homework \
+  -H "x-cron-secret: <CRON_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{}'   # optional {"date":"YYYY-MM-DD"}
+```
+
+- Enqueue a resend request:
+```bash
+curl -X POST https://<your-deploy>/api/homework/resend \
+  -H "x-homework-signup-key: <HOMEWORK_SIGNUP_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"family@example.com","date":"2026-07-01","reason":"bounced"}'
+```
+
+- Process resends (run manually or from cron):
+```bash
+curl -X POST https://<your-deploy>/api/cron/process-resends -H "x-cron-secret: <CRON_SECRET>"
+```
+
+---
+
+## Suggested Vercel cron jobs
+
+Create scheduled jobs in Vercel (or any scheduler) to run these endpoints:
+
+- `POST /api/homework/generate-weekly` — Weekly, Sunday 20:00 (generate next week's homework)
+- `POST /api/cron/send-homework` — Daily, 07:00 (send homework on allowed days; route will skip non-homework days)
+- `POST /api/cron/process-resends` — Every 15 minutes or hourly to process students flagged for resend (`signups.resend = true`)
+
+Note: The `send-homework` route already checks the day-of-week (Mon/Wed/Fri) and student `days` list before sending.
+
+---
+
+## Testing & safety
+
+- Use a staging Resend key and a test Supabase project for trial runs.
+- Before enabling production: test end-to-end with one student and a test inbox.
+- Add idempotency if desired (recommended): e.g., check `sent_emails` for a student/date before sending, or add a `sent` flag per student+homework row.
+
+---
+
+## Next recommended work
+
+1. Add idempotency protections to avoid double sends (I can implement this).
+2. Add admin UI to view `sent_emails` and to flag resends for students from the teacher UI.
+3. Optionally add metrics/alerts for failed sends.
+
+---
+
+If you want, I can now implement idempotency (prevent duplicate sends) or add a small admin UI for resends—tell me which to do next.
