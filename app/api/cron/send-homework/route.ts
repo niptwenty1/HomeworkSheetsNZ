@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { buildHomeworkEmailPayload } from "../../../lib/homeworkEmail";
 import { getSupabaseHomeworkForDate, getSupabaseStudents, logSentEmail } from "../../../lib/supabaseHomeworkData";
-import { sendWithResend } from "../../../lib/email";
+import { sendHomeworkEmail } from "../../../lib/email";
 
 function verifySecretHeader(headerValue: string | null, secret: string) {
   if (!headerValue) return false;
@@ -63,12 +63,20 @@ export async function POST(request: Request) {
     getSupabaseStudents(),
     getSupabaseHomeworkForDate(targetDate),
   ]);
+  console.log("Homework", { homeworkRows});
 
   const homeworkByYearLevel = new Map(
     homeworkRows.map((row) => [String(row.year_level), row]),
   );
+  console.log(" Homework By Level", { homeworkByYearLevel});
 
-  const preparedSends = [] as Array<{ studentName: string; email: string; subject: string }>;
+  const preparedSends = [] as Array<{
+    studentName: string;
+    email: string;
+    subject: string;
+    status?: string;
+    providerResponse?: unknown;
+  }>;
 
   for (const student of students) {
     const studentDays = parseStudentDays(student.days);
@@ -110,9 +118,9 @@ export async function POST(request: Request) {
       date: targetDate,
     });
 
-    // send via Resend
+    // send via configured mail provider
     try {
-      const sendResult = await sendWithResend({
+      const sendResult = await sendHomeworkEmail({
         to: String(student.email || ""),
         subject: payload.subject,
         html: payload.html,

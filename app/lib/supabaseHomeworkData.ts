@@ -79,7 +79,7 @@ export async function getSupabaseHomeworkForDate(dateStr: string) {
 
 export async function getStudentByEmail(email: string) {
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase.from("signups").select("child_name, email, year_level, difficulty_level, days").ilike("email", email).limit(1).single();
+  const { data, error } = await supabase.from("signups").select("child_name, email, year_level, days").ilike("email", email).limit(1).single();
 
   if (error) {
     if (error.code === "PGRST116") return null; // not found single
@@ -94,22 +94,32 @@ export async function flagStudentForResend({
   date,
   reason,
 }: {
-  email: string;
+  email: string | string[];
   date?: string | null;
   reason?: string | null;
 }) {
   const supabase = getSupabaseServerClient();
-  const { error } = await supabase
-    .from("signups")
-    .update({ resend: true, resend_date: date || null, resend_reason: reason || null, resend_requested_at: new Date().toISOString() })
-    .ilike("email", email);
+  const normalizedEmails = (Array.isArray(email) ? email : [email])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
 
-  if (error) throw new Error(error.message);
+  if (normalizedEmails.length === 0) {
+    return;
+  }
+
+  for (const normalizedEmail of normalizedEmails) {
+    const { error } = await supabase
+      .from("signups")
+      .update({ resend: true, resend_date: date || null, resend_reason: reason || null, resend_requested_at: new Date().toISOString() })
+      .ilike("email", normalizedEmail);
+
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function getStudentsMarkedForResend() {
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase.from("signups").select("id, child_name, email, year_level, difficulty_level, days, resend_date, resend_reason").eq("resend", true);
+  const { data, error } = await supabase.from("signups").select("id, child_name, email, year_level, days, resend_date, resend_reason").eq("resend", true);
 
   if (error) throw new Error(error.message);
   return data || [];

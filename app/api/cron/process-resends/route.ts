@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStudentsMarkedForResend, getStudentByEmail, getSupabaseHomeworkForDate, clearResendFlagById, logSentEmail } from "../../../lib/supabaseHomeworkData";
 import { buildHomeworkEmailPayload } from "../../../lib/homeworkEmail";
-import sendWithResend from "../../../lib/email";
+import sendHomeworkEmail from "../../../lib/email";
 
 function verifySecretHeader(headerValue: string | null, secret: string) {
   if (!headerValue) return false;
@@ -66,15 +66,16 @@ export async function POST(request: Request) {
         date: String(date || new Date().toISOString().slice(0, 10)),
       });
 
-      const sendResult = await sendWithResend({ to: student.email, subject: payload.subject, html: payload.html, from: process.env.FROM_EMAIL, replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL });
+      const sendResult = await sendHomeworkEmail({ to: student.email, subject: payload.subject, html: payload.html, from: process.env.FROM_EMAIL, replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL });
 
       await logSentEmail({ email: student.email, name: student.child_name, year: student.year_level, date: String(req.resend_date || ""), status: sendResult.ok ? "sent" : "failed", providerResponse: sendResult.body });
 
       await clearResendFlagById(Number(req.id));
       results.push({ id: Number(req.id), email: String(req.email || ""), status: sendResult.ok ? "sent" : "failed" });
-    } catch (e: any) {
+    } catch (error: unknown) {
       await clearResendFlagById(Number(req.id));
       results.push({ id: Number(req.id), email: String(req.email || ""), status: "error" });
+      console.error("Failed to process resend request", error);
     }
   }
 

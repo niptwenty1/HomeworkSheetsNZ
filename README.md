@@ -11,7 +11,7 @@ This README summarizes what changed, how the pieces fit together, the database s
 - Frontend: remains the Next.js app (signup page, public pages).
 - Backend / generation: server-side Claude call now lives in `app/lib/homeworkGeneration.ts` and is triggered by `POST /api/homework/generate-weekly`.
 - Persistence: Supabase now stores students, curriculum, generated homework and send logs.
-- Sending: emails are sent using Resend via `app/lib/email.ts`.
+- Sending: emails are sent through a provider-agnostic mail layer in `app/lib/email.ts`. Gmail SMTP is the default provider, with Resend available as a switchable alternative via configuration.
 - Cron: Vercel scheduled routes call the server routes to generate and send homework.
  - Resend/Retry: resends are now flagged on the `signups` row (`resend` boolean and optional `resend_date`, `resend_reason`). The resend API marks a student for resend and the processor cron reads `signups` where `resend = true`.
 
@@ -22,7 +22,7 @@ This README summarizes what changed, how the pieces fit together, the database s
 - `app/lib/homeworkGeneration.ts` — builds the Claude prompt and calls the Claude API, unchanged prompt logic.
 - `app/lib/supabaseHomeworkData.ts` — Supabase helpers (students, curriculum, homework rows, sent email logging, resend helpers).
 - `app/lib/homeworkEmail.ts` — builds HTML email and completion signature.
-- `app/lib/email.ts` — small Resend HTTP client wrapper.
+- `app/lib/email.ts` — provider-agnostic mail helper that uses Gmail SMTP by default and can switch to Resend via configuration.
 - `app/api/homework/generate-weekly/route.ts` — server route that triggers Claude and saves rows to Supabase.
 - `app/api/cron/send-homework/route.ts` — cron route that finds today's homework and sends emails to students.
 - `app/api/homework/resend/route.ts` — API to enqueue a resend request for a specific student/date.
@@ -48,7 +48,10 @@ Set the following in your deployment environment and in `.env` for local testing
 
 - `SUPABASE_URL` — your Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY` — service role key for server operations
-- `RESEND_API_KEY` — your Resend API key
+- `MAIL_PROVIDER` — mail provider to use (`gmail` by default, or `resend`)
+- `GMAIL_USER` — Gmail account used for SMTP delivery
+- `GMAIL_APP_PASSWORD` — Gmail app password for SMTP auth
+- `RESEND_API_KEY` — your Resend API key (required if `MAIL_PROVIDER=resend`)
 - `FROM_EMAIL` — sender email (used in the `From` field)
 - `REPLY_TO_EMAIL` — reply-to address
 - `CRON_SECRET` — secret used by cron routes to authorize Vercel scheduled calls
@@ -80,13 +83,19 @@ All routes expect JSON where applicable and are protected with the appropriate s
   - Response: summary of prepared/sent emails, e.g. `{ ok: true, date: "2026-07-03", count: 12, sends: [...] }`
 
 -- `POST /api/homework/resend`
-  - Purpose: Flag a student for a resend (sets `signups.resend = true`) so the processor cron will resend the homework.
-  - Payload example:
+  - Purpose: Flag one or more students for a resend (sets `signups.resend = true`) so the processor cron will resend the homework.
+  - Payload examples:
     ```json
     { "email": "family@example.com", "date": "2026-07-01", "reason": "bounced" }
     ```
+    ```json
+    { "emails": ["family@example.com", "other@example.com"], "date": "2026-07-01", "reason": "bounced" }
+    ```
+    ```json
+    { "email": "family@example.com, other@example.com", "date": "2026-07-01", "reason": "bounced" }
+    ```
   - Headers: `x-homework-signup-key: <HOMEWORK_SIGNUP_SECRET>` (or `x-cron-secret` depending on your configuration)
-  - Response: `{ ok: true }` on success
+  - Response: `{ ok: true, count: <n>, emails: [...] }` on success
 
 -- `POST /api/cron/process-resends`
   - Purpose: Process students flagged with `resend = true` in `signups`, perform sends, log results, and clear the flag.
@@ -129,7 +138,7 @@ curl -X POST https://<your-deploy>/api/cron/send-homework \
 curl -X POST https://<your-deploy>/api/homework/resend \
   -H "x-homework-signup-key: <HOMEWORK_SIGNUP_SECRET>" \
   -H "Content-Type: application/json" \
-  -d '{"email":"family@example.com","date":"2026-07-01","reason":"bounced"}'
+  -d '{"emails":["family@example.com","other@example.com"],"date":"2026-07-01","reason":"bounced"}'
 ```
 
 - Process resends (run manually or from cron):
@@ -153,8 +162,9 @@ Note: The `send-homework` route already checks the day-of-week (Mon/Wed/Fri) and
 
 ## Testing & safety
 
-- Use a staging Resend key and a test Supabase project for trial runs.
+- Use a staging mail provider and a test Supabase project for trial runs.
 - Before enabling production: test end-to-end with one student and a test inbox.
+- For Gmail SMTP, create an app password in your Google account and keep it in `GMAIL_APP_PASSWORD` rather than using your normal Google password.
 - Add idempotency if desired (recommended): e.g., check `sent_emails` for a student/date before sending, or add a `sent` flag per student+homework row.
 
 ---
