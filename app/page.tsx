@@ -93,6 +93,7 @@ function HomeworkSignupForm() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-homework-signup-key": process.env.NEXT_PUBLIC_HOMEWORK_SIGNUP_KEY ?? "",
         },
         body: JSON.stringify({
           parentName: cleanParentName,
