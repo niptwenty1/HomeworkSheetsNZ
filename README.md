@@ -53,6 +53,8 @@ Set the following in your deployment environment and in `.env` for local testing
 - `GMAIL_USER` — Gmail account used for SMTP delivery
 - `GMAIL_APP_PASSWORD` — Gmail app password for SMTP auth
 - `RESEND_API_KEY` — your Resend API key (required if `MAIL_PROVIDER=resend`)
+- `MAILERLITE_API_KEY` — MailerLite API key used to sync each new signup as a subscriber
+- `MAILERLITE_GROUP_ID` or `MAILERLITE_GROUP_IDS` — optional MailerLite group id (or comma-separated ids) used when adding subscribers
 - `FROM_EMAIL` — sender email (used in the `From` field)
 - `REPLY_TO_EMAIL` — reply-to address
 - `CRON_SECRET` — secret used by cron routes to authorize Vercel scheduled calls

@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import getSupabaseServerClient from "../../lib/supabaseServer";
+import { syncSignupToMailerLite } from "../../lib/mailerlite";
 
 type SignupPayload = {
   childName?: unknown;
@@ -102,7 +103,21 @@ export async function POST(request: Request) {
       throw new Error(`Supabase insert failed: ${error.message}`);
     }
 
-    return NextResponse.json({ ok: true });
+    const mailerLiteResult = await syncSignupToMailerLite({
+      email,
+      childName,
+      parentName,
+    });
+
+    if (!mailerLiteResult.ok) {
+      console.error("MailerLite sync failed:", mailerLiteResult.reason);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      mailerLiteSynced: mailerLiteResult.ok,
+      mailerLiteSkipped: Boolean(mailerLiteResult.skipped),
+    });
   } catch {
 
     return NextResponse.json(
