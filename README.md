@@ -24,6 +24,7 @@ This README summarizes what changed, how the pieces fit together, the database s
 - `app/lib/homeworkEmail.ts` — builds HTML email and completion signature.
 - `app/lib/email.ts` — provider-agnostic mail helper that uses Gmail SMTP by default and can switch to Resend via configuration.
 - `app/api/homework/generate-weekly/route.ts` — server route that triggers Claude and saves rows to Supabase.
+- `app/api/cron/generate-weekly/route.ts` — cron route that generates a full week of homework for year levels 1 through 10.
 - `app/api/cron/send-homework/route.ts` — cron route that finds today's homework and sends emails to students.
 - `app/api/homework/resend/route.ts` — API to enqueue a resend request for a specific student/date.
 - `app/api/cron/process-resends/route.ts` — cron route that processes pending resends.
@@ -75,6 +76,12 @@ All routes expect JSON where applicable and are protected with the appropriate s
     ```
   - Headers: `x-cron-secret: <CRON_SECRET>` (route verifies secret)
   - Response: `{ ok: true, count: <rows written> }`
+
+- `GET or POST /api/cron/generate-weekly`
+  - Purpose: Generate a full week of homework for all year levels 1 through 10 and store it in Supabase.
+  - Optional query example: `?referenceDate=2026-07-04`
+  - Headers: `x-cron-secret: <CRON_SECRET>` or `x-vercel-cron: 1`
+  - Response: `{ ok: true, total: <rows written>, generated: [{ yearLevel, count }] }`
 
 - `POST /api/cron/send-homework`
   - Purpose: Send today's homework to all eligible students (reads `signups` and `homework_entries`).
@@ -153,6 +160,7 @@ curl -X POST https://<your-deploy>/api/cron/process-resends -H "x-cron-secret: <
 Create scheduled jobs in Vercel (or any scheduler) to run these endpoints:
 
 - `POST /api/homework/generate-weekly` — Weekly, Sunday 20:00 (generate next week's homework)
+- `POST /api/cron/generate-weekly` — Weekly, Sunday 20:00 (generate full-week homework for years 1-10)
 - `POST /api/cron/send-homework` — Daily, 07:00 (send homework on allowed days; route will skip non-homework days)
 - `POST /api/cron/process-resends` — Every 15 minutes or hourly to process students flagged for resend (`signups.resend = true`)
 

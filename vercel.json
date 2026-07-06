@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron",
+      "path": "/api/cron/generate-weekly",
       "schedule": "0 10 * * 1"
     },
     {
