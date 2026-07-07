@@ -30,7 +30,29 @@ type ClaudeHomeworkEntry = {
   };
 };
 
-export async function generateWeeklyHomework({
+export type ClaudeGenerationUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  model: string;
+  maxTokens: number;
+};
+
+export type WeeklyHomeworkGenerationResult = {
+  entries: ClaudeHomeworkEntry[];
+  usage: ClaudeGenerationUsage;
+};
+
+function getMaxTokens() {
+  const raw = process.env.CLAUDE_MAX_TOKENS || process.env.MAX_TOKENS || "4000";
+  const parsed = Number.parseInt(String(raw).trim(), 10);
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return 4000;
+  }
+  return parsed;
+}
+
+export async function generateWeeklyHomeworkWithUsage({
   yearLevel,
   schoolDays,
   curriculumContent = "",
@@ -42,7 +64,7 @@ export async function generateWeeklyHomework({
   curriculumContent?: string;
   recentTopics?: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingTopic?: string; grammarTopic?: string }>;
   students?: Array<{ name?: string; email?: string; level?: string; difficultyLevel?: string; days?: string }>;
-}) {
+}): Promise<WeeklyHomeworkGenerationResult> {
   const normalizedYearLevel = String(yearLevel || 6);
   const datelistStr = schoolDays
     .map((day, index) => `${index + 1}. ${day.date}`)
@@ -180,6 +202,9 @@ Each object must follow this exact structure:
     throw new Error("Missing Claude API key.");
   }
 
+  const maxTokens = getMaxTokens();
+  const model = process.env.CLAUDE_MODEL || "claude-3-5-sonnet-latest";
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -188,8 +213,8 @@ Each object must follow this exact structure:
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.CLAUDE_MODEL || "claude-3-5-sonnet-latest",
-      max_tokens: Number(process.env.CLAUDE_MAX_TOKENS || 4000),
+      model,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -202,6 +227,10 @@ Each object must follow this exact structure:
   const data = await response.json() as {
     content?: Array<{ text?: string }>;
     error?: unknown;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+    };
   };
 
   if (data.error) {
@@ -226,5 +255,28 @@ Each object must follow this exact structure:
   }
 
   const parsed = JSON.parse(cleaned.slice(arrayStart, arrayEnd + 1)) as ClaudeHomeworkEntry[];
-  return parsed;
+  const inputTokens = Number(data.usage?.input_tokens || 0);
+  const outputTokens = Number(data.usage?.output_tokens || 0);
+
+  return {
+    entries: parsed,
+    usage: {
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      model,
+      maxTokens,
+    },
+  };
+}
+
+export async function generateWeeklyHomework(args: {
+  yearLevel: string | number;
+  schoolDays: SchoolDay[];
+  curriculumContent?: string;
+  recentTopics?: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingTopic?: string; grammarTopic?: string }>;
+  students?: Array<{ name?: string; email?: string; level?: string; difficultyLevel?: string; days?: string }>;
+}) {
+  const result = await generateWeeklyHomeworkWithUsage(args);
+  return result.entries;
 }

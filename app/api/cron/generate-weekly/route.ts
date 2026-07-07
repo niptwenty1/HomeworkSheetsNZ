@@ -1,8 +1,6 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import getSupabaseServerClient from "../../../lib/supabaseServer";
-import { generateWeeklyHomework } from "../../../lib/homeworkGeneration";
-import { getSupabaseCurriculumContent, getSupabaseRecentHomeworkTopics, getSupabaseStudents } from "../../../lib/supabaseHomeworkData";
 
 function verifySecretHeader(headerValue: string | null, secret: string) {
   if (!headerValue) return false;
@@ -19,39 +17,8 @@ function verifySecretHeader(headerValue: string | null, secret: string) {
   }
 }
 
-function getDayName(date: Date) {
-  return date.toLocaleDateString("en-NZ", { weekday: "long" });
-}
-
 function getDateString(date: Date) {
   return date.toISOString().slice(0, 10);
-}
-
-function getSchoolDaysInWeek(referenceDate: Date) {
-  const start = new Date(referenceDate);
-  const day = start.getDay();
-  const diff = (day + 6) % 7;
-  start.setDate(start.getDate() - diff);
-
-  const days = [] as Array<{ date: string; dateStr: string }>;
-  for (let i = 0; i < 5; i += 1) {
-    const current = new Date(start);
-    current.setDate(start.getDate() + i);
-    const dayName = getDayName(current);
-    if (dayName === "Monday" || dayName === "Wednesday" || dayName === "Friday") {
-      days.push({
-        date: current.toLocaleDateString("en-NZ", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }),
-        dateStr: getDateString(current),
-      });
-    }
-  }
-
-  return days;
 }
 
 function isAuthorized(request: Request) {
@@ -67,60 +34,36 @@ function isAuthorized(request: Request) {
 }
 
 async function generateForAllYearLevels(referenceDate: Date) {
-  const schoolDays = getSchoolDaysInWeek(referenceDate);
-  const students = await getSupabaseStudents();
   const supabase = getSupabaseServerClient();
   const years = Array.from({ length: 10 }, (_, index) => String(index + 1));
-  const generated: Array<{ yearLevel: string; count: number }> = [];
+  const referenceDateStr = getDateString(referenceDate);
+  const queueRows = years.map((yearLevel) => ({
+    reference_date: referenceDateStr,
+    year_level: yearLevel,
+    status: "queued",
+    attempts: 0,
+    last_error: null,
+    source_route: "/api/cron/generate-weekly",
+    started_at: null,
+    finished_at: null,
+    updated_at: new Date().toISOString(),
+  }));
 
-  for (const yearLevel of years) {
-    const [curriculumContent, recentTopics] = await Promise.all([
-      getSupabaseCurriculumContent(yearLevel),
-      getSupabaseRecentHomeworkTopics(yearLevel, referenceDate),
-    ]);
+  const { data, error } = await supabase
+    .from("homework_generation_queue")
+    .upsert(queueRows, { onConflict: "reference_date,year_level" })
+    .select("id, year_level, status");
 
-    const generatedHomework = await generateWeeklyHomework({
-      yearLevel,
-      schoolDays,
-      curriculumContent,
-      recentTopics,
-      students,
-    });
-
-    const rows = generatedHomework.map((entry) => ({
-      date: schoolDays.find((day) => day.date === entry.date)?.dateStr || null,
-      day: entry.date.split(" ")[0],
-      maths_topic: entry.maths.topic,
-      maths_instructions: entry.maths.instructions,
-      maths_questions: entry.maths.questions,
-      maths_word_problem: entry.maths.word_problem,
-      reading_title: entry.english.reading_passage.title,
-      reading_text: entry.english.reading_passage.text,
-      reading_questions: entry.english.reading_passage.questions,
-      writing_type: entry.english.writing_task.type,
-      writing_prompt: entry.english.writing_task.prompt,
-      writing_word_count: entry.english.writing_task.word_count,
-      grammar_topic: entry.english.grammar_focus.topic,
-      grammar_instruction: entry.english.grammar_focus.instruction,
-      grammar_exercise: entry.english.grammar_focus.exercise,
-      year_level: yearLevel,
-      generated_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    }));
-
-    const { error } = await supabase.from("homework_entries").upsert(rows, {
-      onConflict: "date,year_level",
-      ignoreDuplicates: false,
-    });
-
-    if (error) {
-      throw new Error(`Year ${yearLevel}: ${error.message}`);
-    }
-
-    generated.push({ yearLevel, count: rows.length });
+  if (error) {
+    throw new Error(error.message);
   }
 
-  return generated;
+  return (data || []) as Array<{ id: number; year_level: string; status: string }>;
+}
+
+function getBaseUrl(request: Request) {
+  const url = new URL(request.url);
+  return `${url.protocol}//${url.host}`;
 }
 
 async function handleRequest(request: Request) {
@@ -133,13 +76,30 @@ async function handleRequest(request: Request) {
   const referenceDate = referenceDateParam ? new Date(referenceDateParam) : new Date();
 
   try {
-    const generated = await generateForAllYearLevels(referenceDate);
-    const total = generated.reduce((sum, entry) => sum + entry.count, 0);
+    const queuedTasks = await generateForAllYearLevels(referenceDate);
+    const referenceDateStr = getDateString(referenceDate);
+    const baseUrl = getBaseUrl(request);
+    const cronSecret = process.env.CRON_SECRET;
+
+    const dispatches = queuedTasks.map((task) => {
+      const workerUrl = `${baseUrl}/api/cron/generate-weekly-worker?queueId=${task.id}&referenceDate=${referenceDateStr}&yearLevel=${task.year_level}`;
+      return fetch(workerUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-vercel-cron": "1",
+          ...(cronSecret ? { "x-cron-secret": cronSecret } : {}),
+        },
+      }).catch(() => null);
+    });
+
+    void Promise.allSettled(dispatches);
 
     return NextResponse.json({
       ok: true,
-      total,
-      generated,
+      referenceDate: referenceDateStr,
+      queued: queuedTasks.length,
+      tasks: queuedTasks,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate weekly homework";

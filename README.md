@@ -24,7 +24,8 @@ This README summarizes what changed, how the pieces fit together, the database s
 - `app/lib/homeworkEmail.ts` — builds HTML email and completion signature.
 - `app/lib/email.ts` — provider-agnostic mail helper that uses Gmail SMTP by default and can switch to Resend via configuration.
 - `app/api/homework/generate-weekly/route.ts` — server route that triggers Claude and saves rows to Supabase.
-- `app/api/cron/generate-weekly/route.ts` — cron route that generates a full week of homework for year levels 1 through 10.
+- `app/api/cron/generate-weekly/route.ts` — cron trigger route that enqueues weekly generation tasks (one task per year level).
+- `app/api/cron/generate-weekly-worker/route.ts` — worker route that processes one queued generation task.
 - `app/api/cron/send-homework/route.ts` — cron route that finds today's homework and sends emails to students.
 - `app/api/homework/resend/route.ts` — API to enqueue a resend request for a specific student/date.
 - `app/api/cron/process-resends/route.ts` — cron route that processes pending resends.
@@ -39,6 +40,8 @@ This README summarizes what changed, how the pieces fit together, the database s
   - `date`, `day`, `maths_topic`, `maths_instructions`, `maths_questions` (array), `maths_word_problem`, `reading_title`, `reading_text`, `reading_questions` (array), `writing_type`, `writing_prompt`, `writing_word_count`, `grammar_topic`, `grammar_instruction`, `grammar_exercise`, `year_level`, `generated_at`
 - `sent_emails` — records of send attempts: `email`, `name`, `year`, `date`, `status`, `provider_response`, `created_at`
 - `curriculum_items` — migrated curriculum content (used by the Claude prompt)
+- `claude_usage_logs` — per-run Claude token usage and status for weekly generation (`source_route`, `year_level`, `reference_date`, `input_tokens`, `output_tokens`, `total_tokens`, `status`, `error_message`)
+- `homework_generation_queue` — queued weekly generation tasks (`reference_date`, `year_level`, `status`, `attempts`, `last_error`, timestamps)
 - `completions` — previously existing table used when students click completion link
 
 ---
@@ -64,6 +67,7 @@ Set the following in your deployment environment and in `.env` for local testing
 - `COMPLETION_WEB_APP_URL` — base URL students are redirected to when they click the completion link
 - `CLAUDE_API_KEY` (or `ANTHROPIC_API_KEY`) — Claude / Anthropic API key
 - `CLAUDE_MODEL` and `CLAUDE_MAX_TOKENS` — optional model/tokens settings
+- `MAX_TOKENS` — fallback token limit if `CLAUDE_MAX_TOKENS` is not set
 
 ---
 
@@ -81,7 +85,14 @@ All routes expect JSON where applicable and are protected with the appropriate s
   - Response: `{ ok: true, count: <rows written> }`
 
 - `GET or POST /api/cron/generate-weekly`
-  - Purpose: Generate a full week of homework for all year levels 1 through 10 and store it in Supabase.
+  - Purpose: Enqueue one weekly generation task per year level (1-10) and dispatch worker runs.
+  - Queueing: writes tasks to `homework_generation_queue`.
+
+- `POST /api/cron/generate-weekly-worker`
+  - Purpose: Process one queued weekly generation task.
+  - Efficiency: worker pre-checks existing `homework_entries` and only calls Claude for missing year/date rows.
+  - Retries: failed tasks are re-queued up to a max attempt count.
+  - Usage logging: writes one record per worker run to `claude_usage_logs`.
   - Optional query example: `?referenceDate=2026-07-04`
   - Headers: `x-cron-secret: <CRON_SECRET>` or `x-vercel-cron: 1`
   - Response: `{ ok: true, total: <rows written>, generated: [{ yearLevel, count }] }`

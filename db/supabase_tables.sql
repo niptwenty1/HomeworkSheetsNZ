@@ -73,3 +73,35 @@ create table if not exists curriculum_items (
   example_prompt text,
   created_at timestamptz default now()
 );
+
+create table if not exists claude_usage_logs (
+  id bigint generated always as identity primary key,
+  source_route text not null,
+  year_level text,
+  reference_date text,
+  generated_rows integer default 0,
+  school_days_count integer default 0,
+  status text,
+  error_message text,
+  input_tokens integer default 0,
+  output_tokens integer default 0,
+  total_tokens integer default 0,
+  model text,
+  max_tokens integer,
+  created_at timestamptz default now()
+);
+
+create table if not exists homework_generation_queue (
+  id bigint generated always as identity primary key,
+  reference_date text not null,
+  year_level text not null,
+  status text not null default 'queued',
+  attempts integer not null default 0,
+  last_error text,
+  source_route text,
+  started_at timestamptz,
+  finished_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(reference_date, year_level)
+);
