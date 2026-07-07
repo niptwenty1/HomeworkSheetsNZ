@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions, isAdminEmail } from "../../../lib/adminAuth";
 import getSupabaseServerClient from "../../../lib/supabaseServer";
-import { generateWeeklyHomework } from "../../../lib/homeworkGeneration";
+import { generateWeeklyHomeworkWithUsage } from "../../../lib/homeworkGeneration";
 import { getSupabaseCurriculumContent, getSupabaseRecentHomeworkTopics, getSupabaseStudents } from "../../../lib/supabaseHomeworkData";
 
 function getWeekBounds(referenceDate: Date) {
@@ -96,25 +96,62 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const yearLevel = isValidYearLevel(body.yearLevel) ? String(body.yearLevel) : "6";
     const referenceDate = body.referenceDate ? new Date(String(body.referenceDate)) : new Date();
+    const referenceDateString = referenceDate.toISOString().slice(0, 10);
 
     const schoolDays = getSchoolDaysInWeek(referenceDate);
+    const dayDates = schoolDays.map((day) => day.dateStr);
+    const supabase = getSupabaseServerClient();
+
+    const { data: existingRows, error: existingError } = await supabase
+      .from("homework_entries")
+      .select("date")
+      .eq("year_level", yearLevel)
+      .in("date", dayDates);
+
+    if (existingError) {
+      return NextResponse.json({ ok: false, error: existingError.message }, { status: 500 });
+    }
+
+    const existingDates = new Set((existingRows || []).map((row) => String(row.date || "")));
+    const missingDays = schoolDays.filter((day) => !existingDates.has(day.dateStr));
+
+    if (missingDays.length === 0) {
+      await supabase.from("claude_usage_logs").insert([
+        {
+          source_route: "/api/admin/homework",
+          year_level: yearLevel,
+          reference_date: referenceDateString,
+          generated_rows: 0,
+          school_days_count: schoolDays.length,
+          status: "skipped-existing",
+          error_message: null,
+          input_tokens: 0,
+          output_tokens: 0,
+          total_tokens: 0,
+          model: null,
+          max_tokens: null,
+        },
+      ]);
+
+      return NextResponse.json({ ok: true, count: 0, skipped: true });
+    }
+
     const [curriculumContent, recentTopics, students] = await Promise.all([
       getSupabaseCurriculumContent(yearLevel),
       getSupabaseRecentHomeworkTopics(yearLevel, referenceDate),
       getSupabaseStudents(),
     ]);
 
-    const generatedHomework = await generateWeeklyHomework({
+    const { entries: generatedHomework, usage } = await generateWeeklyHomeworkWithUsage({
       yearLevel,
-      schoolDays,
+      schoolDays: missingDays,
       curriculumContent,
       recentTopics,
       students,
     });
 
-    const supabase = getSupabaseServerClient();
     const rows = generatedHomework.map((entry) => ({
-      date: schoolDays.find((day) => day.date === entry.date)?.dateStr || null,
+      date: missingDays.find((day) => day.date === entry.date)?.dateStr || null,
       day: entry.date.split(" ")[0],
       maths_topic: entry.maths.topic,
       maths_instructions: entry.maths.instructions,
@@ -142,6 +179,23 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
     }
+
+    await supabase.from("claude_usage_logs").insert([
+      {
+        source_route: "/api/admin/homework",
+        year_level: yearLevel,
+        reference_date: referenceDateString,
+        generated_rows: rows.length,
+        school_days_count: missingDays.length,
+        status: "generated",
+        error_message: null,
+        input_tokens: usage.inputTokens,
+        output_tokens: usage.outputTokens,
+        total_tokens: usage.totalTokens,
+        model: usage.model,
+        max_tokens: usage.maxTokens,
+      },
+    ]);
 
     return NextResponse.json({ ok: true, count: rows.length });
   } catch (error) {
