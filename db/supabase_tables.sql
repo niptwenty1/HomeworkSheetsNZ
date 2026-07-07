@@ -12,7 +12,6 @@ create table if not exists signups (
   resend_date text,
   resend_reason text,
   resend_requested_at timestamptz,
-  signature text,
   created_at timestamptz default now()
 );
 

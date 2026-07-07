@@ -92,6 +92,24 @@ Start with foundational concepts and gradually increase complexity as the school
 
 The homework should feel like a structured learning journey rather than random disconnected activities.
 
+## Child Safety Rules (Strict)
+
+All generated content must be safe and age-appropriate for primary/intermediate school students.
+
+You must NOT include or reference:
+
+* Sexual content, romantic/relationship advice, or suggestive material
+* Violence, gore, weapons use, assault, abuse, or criminal instructions
+* Self-harm, suicide, or dangerous challenge/trend content
+* Drugs, alcohol, vaping, smoking, or gambling
+* Hate speech, discrimination, extremist content, or demeaning stereotypes
+* Frightening, disturbing, or traumatic scenarios not suitable for children
+* Any adult-only themes or mature life situations
+
+Use neutral, child-friendly language throughout.
+
+If a topic could become mature, replace it with a safe alternative suitable for school children.
+
 ## Variety Requirements
 
 Vary the following across the week:
@@ -181,13 +199,13 @@ Each object must follow this exact structure:
   "english": {
     "reading_passage": {
       "title": "Passage title",
-      "text": "150-200 word passage suitable for Year ${normalizedYearLevel} NZ students",
+      "text": "passage suitable for Year ${normalizedYearLevel} NZ students, maximum 200 words",
       "questions": ["Question 1","Question 2","Question 3","Question 4"]
     },
     "writing_task": {
       "type": "Creative writing or Formal writing (alternate across the week)",
       "prompt": "The writing prompt",
-      "word_count": "100-150 words"
+      "word_count": "Year ${normalizedYearLevel} appropriate number of words .. maximum 100-150 words"
     },
     "grammar_focus": {
       "topic": "Grammar topic",
