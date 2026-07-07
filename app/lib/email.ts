@@ -18,6 +18,16 @@ export interface EmailSendResult {
 
 type MailProvider = "gmail" | "resend";
 
+function escapeDisplayName(value: string) {
+  return value.replace(/"/g, "").trim();
+}
+
+function buildFromAddress(baseAddress: string) {
+  const fromName = process.env.FROM_NAME?.trim();
+  if (!fromName) return baseAddress;
+  return `"${escapeDisplayName(fromName)}" <${baseAddress}>`;
+}
+
 function getConfiguredProvider(): MailProvider {
   const configuredProvider = process.env.MAIL_PROVIDER?.toLowerCase();
   return configuredProvider === "resend" ? "resend" : "gmail";
@@ -31,7 +41,8 @@ async function sendWithGmail(options: EmailSendOptions): Promise<EmailSendResult
     throw new Error("GMAIL_USER and GMAIL_APP_PASSWORD must be configured");
   }
 
-  const fromAddress = options.from || process.env.FROM_EMAIL || gmailUser;
+  const rawFromAddress = options.from || process.env.FROM_EMAIL || gmailUser;
+  const fromAddress = buildFromAddress(rawFromAddress);
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 587,
@@ -69,10 +80,11 @@ async function sendWithResendProvider(options: EmailSendOptions): Promise<EmailS
     throw new Error("RESEND_API_KEY is not configured");
   }
 
-  const fromAddress = options.from || process.env.FROM_EMAIL;
-  if (!fromAddress) {
+  const rawFromAddress = options.from || process.env.FROM_EMAIL;
+  if (!rawFromAddress) {
     throw new Error("FROM_EMAIL is not configured");
   }
+  const fromAddress = buildFromAddress(rawFromAddress);
 
   const payload = {
     from: fromAddress,

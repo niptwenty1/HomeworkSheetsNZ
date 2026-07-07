@@ -47,6 +47,11 @@ type SessionPayload = {
 type SortKey = keyof SignupRow;
 type HomeworkSortKey = keyof HomeworkRow;
 type HomeworkTopic = "all" | "maths" | "reading" | "writing" | "grammar";
+const SIGNUPS_PER_PAGE = 15;
+
+function getTodayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -65,6 +70,9 @@ export default function AdminPage() {
   const [homeworkSortDirection, setHomeworkSortDirection] = useState<"asc" | "desc">("desc");
   const [homeworkYearLevel, setHomeworkYearLevel] = useState("6");
   const [homeworkTopic, setHomeworkTopic] = useState<HomeworkTopic>("all");
+  const [signupYearFilter, setSignupYearFilter] = useState("all");
+  const [signupPage, setSignupPage] = useState(1);
+  const [resendDates, setResendDates] = useState<Record<number, string>>({});
   const isAuthorized = Boolean(session?.user);
 
   useEffect(() => {
@@ -72,7 +80,35 @@ export default function AdminPage() {
   }, []);
 
   const sortedSignups = [...signups].sort((a, b) => compareRows(a, b, sortKey, sortDirection));
+  const filteredSignups = signupYearFilter === "all"
+    ? sortedSignups
+    : sortedSignups.filter((signup) => String(signup.year_level) === signupYearFilter);
+  const totalSignupPages = Math.max(1, Math.ceil(filteredSignups.length / SIGNUPS_PER_PAGE));
+  const currentSignupPage = Math.min(signupPage, totalSignupPages);
+  const paginatedSignups = filteredSignups.slice(
+    (currentSignupPage - 1) * SIGNUPS_PER_PAGE,
+    currentSignupPage * SIGNUPS_PER_PAGE,
+  );
   const sortedHomework = [...homework].sort((a, b) => compareHomeworkRows(a, b, homeworkSortKey, homeworkSortDirection));
+
+  useEffect(() => {
+    const today = getTodayDateString();
+    setResendDates((current) => {
+      const next = { ...current };
+      for (const signup of signups) {
+        if (!next[signup.id]) {
+          next[signup.id] = signup.resend_date || today;
+        }
+      }
+      return next;
+    });
+  }, [signups]);
+
+  useEffect(() => {
+    if (signupPage > totalSignupPages) {
+      setSignupPage(totalSignupPages);
+    }
+  }, [signupPage, totalSignupPages]);
 
   async function loadSession() {
     setSessionLoading(true);
@@ -188,16 +224,17 @@ export default function AdminPage() {
   }
 
   async function handleFlagForResend(signup: SignupRow) {
+    const selectedDate = resendDates[signup.id] || getTodayDateString();
     setFlaggingId(signup.id);
-    setStatus(`Flagging ${signup.email} for resend...`);
+    setStatus(`Flagging ${signup.email} for resend on ${selectedDate}...`);
     try {
       const response = await fetch("/api/admin/flag-resend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: signup.email,
-          date: new Date().toISOString().slice(0, 10),
-          reason: "Flagged from admin dashboard",
+          date: selectedDate,
+          reason: `Flagged from admin dashboard for ${selectedDate}`,
         }),
       });
 
@@ -206,13 +243,25 @@ export default function AdminPage() {
         throw new Error(result.error || "Unable to flag resend");
       }
 
-      setStatus(`Flagged ${signup.email} for resend`);
+      setStatus(`Flagged ${signup.email} for resend on ${selectedDate}`);
       await loadSignups();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to flag resend");
     } finally {
       setFlaggingId(null);
     }
+  }
+
+  function handleSignupYearFilterChange(nextFilter: string) {
+    setSignupYearFilter(nextFilter);
+    setSignupPage(1);
+  }
+
+  function handleResendDateChange(signupId: number, nextDate: string) {
+    setResendDates((current) => ({
+      ...current,
+      [signupId]: nextDate,
+    }));
   }
 
   function renderSortArrow(key: SortKey) {
@@ -286,9 +335,28 @@ export default function AdminPage() {
       {isAuthorized ? (
         <div className="flex flex-col gap-6">
           <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <strong className="text-lg font-semibold text-slate-900">Signups</strong>
               <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  Year
+                  <select
+                    value={signupYearFilter}
+                    onChange={(event) => handleSignupYearFilterChange(event.target.value)}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+                  >
+                    <option value="all">All years</option>
+                    {Array.from({ length: 10 }, (_, index) => index + 1).map((year) => (
+                      <option key={year} value={String(year)}>
+                        Year {year}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="text-sm text-slate-500">
+                  Showing {filteredSignups.length === 0 ? 0 : (currentSignupPage - 1) * SIGNUPS_PER_PAGE + 1}
+                  -{Math.min(currentSignupPage * SIGNUPS_PER_PAGE, filteredSignups.length)} of {filteredSignups.length}
+                </span>
                 <span className="text-sm text-slate-500">{status}</span>
                 <button
                   type="button"
@@ -303,8 +371,8 @@ export default function AdminPage() {
 
             {isLoading ? (
               <p className="text-sm text-slate-500">Loading signups...</p>
-            ) : signups.length === 0 ? (
-              <p className="text-sm text-slate-500">No signups found.</p>
+            ) : filteredSignups.length === 0 ? (
+              <p className="text-sm text-slate-500">No signups found for this year filter.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
@@ -318,11 +386,12 @@ export default function AdminPage() {
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("resend")} className="font-semibold">Resend{renderSortArrow("resend")}</button></th>
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("resend_reason")} className="font-semibold">Reason{renderSortArrow("resend_reason")}</button></th>
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("created_at")} className="font-semibold">Created{renderSortArrow("created_at")}</button></th>
+                      <th className="px-3 py-2">Resend date</th>
                       <th className="px-3 py-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedSignups.map((signup) => (
+                    {paginatedSignups.map((signup) => (
                       <tr key={signup.id} className="border-b border-slate-100 last:border-0">
                         <td className="px-3 py-2 font-medium text-slate-900">{signup.child_name}</td>
                         <td className="px-3 py-2 text-slate-700">{signup.parent_name}</td>
@@ -332,6 +401,14 @@ export default function AdminPage() {
                         <td className="px-3 py-2 text-slate-700">{signup.resend ? "Yes" : "No"}</td>
                         <td className="px-3 py-2 text-slate-700">{signup.resend_reason || "—"}</td>
                         <td className="px-3 py-2 text-slate-700">{new Date(signup.created_at).toLocaleDateString("en-NZ")}</td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="date"
+                            value={resendDates[signup.id] || ""}
+                            onChange={(event) => handleResendDateChange(signup.id, event.target.value)}
+                            className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700"
+                          />
+                        </td>
                         <td className="px-3 py-2">
                           <button
                             type="button"
@@ -346,6 +423,28 @@ export default function AdminPage() {
                     ))}
                   </tbody>
                 </table>
+
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSignupPage((page) => Math.max(1, page - 1))}
+                    disabled={currentSignupPage <= 1}
+                    className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-sm text-slate-600">
+                    Page {currentSignupPage} of {totalSignupPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSignupPage((page) => Math.min(totalSignupPages, page + 1))}
+                    disabled={currentSignupPage >= totalSignupPages}
+                    className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </div>
