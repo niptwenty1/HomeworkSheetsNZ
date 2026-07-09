@@ -45,11 +45,20 @@ function parseStudentDays(days: string | null | undefined) {
     .filter(Boolean);
 }
 
-async function handleRequest(request: Request) {
+function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const headerSecret = request.headers.get("x-cron-secret");
+  const vercelCronHeader = request.headers.get("x-vercel-cron");
 
-  if (!cronSecret || !verifySecretHeader(headerSecret, cronSecret)) {
+  if (vercelCronHeader === "1") {
+    return true;
+  }
+
+  return Boolean(cronSecret && verifySecretHeader(headerSecret, cronSecret));
+}
+
+async function handleRequest(request: Request) {
+  if (!isAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
