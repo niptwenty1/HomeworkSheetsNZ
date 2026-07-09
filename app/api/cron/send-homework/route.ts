@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
+import { sendCronSummaryEmail } from "../../../lib/cronSummaryEmail";
 import { buildHomeworkEmailPayload } from "../../../lib/homeworkEmail";
 import { getSupabaseHomeworkForDate, getSupabaseStudents, logSentEmail } from "../../../lib/supabaseHomeworkData";
 import { sendHomeworkEmail } from "../../../lib/email";
@@ -90,6 +91,20 @@ async function handleRequest(request: Request) {
       reason: "No homework is scheduled on this day",
     });
 
+    await sendCronSummaryEmail({
+      kind: "send-homework",
+      targetDate,
+      dayName,
+      status: "skipped",
+      counts: {
+        total: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 1,
+      },
+      details: ["No homework is scheduled on this day"],
+    });
+
     return NextResponse.json({
       ok: true,
       skipped: true,
@@ -111,6 +126,20 @@ async function handleRequest(request: Request) {
       targetDate,
       dayName,
       reason: "No homework entries were found for the requested date",
+    });
+
+    await sendCronSummaryEmail({
+      kind: "send-homework",
+      targetDate,
+      dayName,
+      status: "skipped",
+      counts: {
+        total: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 1,
+      },
+      details: ["No homework entries were found for the requested date"],
     });
 
     return NextResponse.json({
@@ -231,11 +260,37 @@ async function handleRequest(request: Request) {
     }
   }
 
+  const sentCount = preparedSends.filter((entry) => !entry.status).length;
+  const failedCount = preparedSends.filter((entry) => entry.status === "failed").length;
+  const errorCount = preparedSends.filter((entry) => entry.status === "error").length;
+  const failedRecipients = preparedSends.filter((entry) => entry.status === "failed" || entry.status === "error");
+
   console.info("[cron/send-homework] complete", {
     targetDate,
     dayName,
     homeworkRows: homeworkRows.length,
     preparedSends: preparedSends.length,
+  });
+
+  await sendCronSummaryEmail({
+    kind: "send-homework",
+    targetDate,
+    dayName,
+    status: "complete",
+    counts: {
+      total: preparedSends.length,
+      sent: sentCount,
+      failed: failedCount + errorCount,
+    },
+    details: [
+      `Homework rows found: ${homeworkRows.length}`,
+      `Prepared sends: ${preparedSends.length}`,
+      `Sent: ${sentCount}`,
+      `Failed or errored: ${failedCount + errorCount}`,
+      ...failedRecipients.map(
+        (entry) => `Failed student: ${entry.studentName} <${entry.email}>${entry.status ? ` (${entry.status})` : ""}`,
+      ),
+    ],
   });
 
   return NextResponse.json({

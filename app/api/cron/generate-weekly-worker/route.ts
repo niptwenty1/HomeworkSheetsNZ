@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
+import { sendCronSummaryEmail } from "../../../lib/cronSummaryEmail";
 import { generateWeeklyHomeworkWithUsage } from "../../../lib/homeworkGeneration";
 import getSupabaseServerClient from "../../../lib/supabaseServer";
 import { getSupabaseCurriculumContent, getSupabaseRecentHomeworkTopics, getSupabaseStudents } from "../../../lib/supabaseHomeworkData";
@@ -247,6 +248,25 @@ export async function POST(request: Request) {
         status: "skipped-existing",
       });
 
+      await sendCronSummaryEmail({
+        kind: "generate-weekly-worker",
+        targetDate: referenceDateStr,
+        status: "skipped-existing",
+        yearLevel,
+        referenceDate: referenceDateStr,
+        counts: {
+          total: 0,
+          generated: 0,
+          skipped: 1,
+        },
+        details: [
+          `Queue ID: ${task.id}`,
+          `Year level: ${yearLevel}`,
+          `School days in week: ${schoolDays.length}`,
+          "All homework rows already existed for this year level and date range.",
+        ],
+      });
+
       return NextResponse.json({ ok: true, queueId: task.id, yearLevel, status: "skipped-existing", generated: 0 });
     }
 
@@ -318,6 +338,24 @@ export async function POST(request: Request) {
       maxTokens: usage.maxTokens,
     });
 
+    await sendCronSummaryEmail({
+      kind: "generate-weekly-worker",
+      targetDate: referenceDateStr,
+      status: "generated",
+      yearLevel,
+      referenceDate: referenceDateStr,
+      counts: {
+        total: rows.length,
+        generated: rows.length,
+      },
+      details: [
+        `Queue ID: ${task.id}`,
+        `Year level: ${yearLevel}`,
+        `Generated rows: ${rows.length}`,
+        `School days processed: ${missingDays.length}`,
+      ],
+    });
+
     return NextResponse.json({ ok: true, queueId: task.id, yearLevel, status: "generated", generated: rows.length });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown worker error";
@@ -341,6 +379,23 @@ export async function POST(request: Request) {
       schoolDaysCount: 0,
       status: shouldRetry ? "retry-queued" : "failed",
       errorMessage: message,
+    });
+
+    await sendCronSummaryEmail({
+      kind: "generate-weekly-worker",
+      targetDate: referenceDateStr,
+      status: shouldRetry ? "retry-queued" : "failed",
+      yearLevel,
+      referenceDate: referenceDateStr,
+      counts: {
+        total: 0,
+        failed: 1,
+      },
+      details: [
+        `Queue ID: ${task.id}`,
+        `Year level: ${yearLevel}`,
+        `Error: ${message}`,
+      ],
     });
 
     return NextResponse.json(
