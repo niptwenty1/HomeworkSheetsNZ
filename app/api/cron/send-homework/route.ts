@@ -45,7 +45,7 @@ function parseStudentDays(days: string | null | undefined) {
     .filter(Boolean);
 }
 
-export async function POST(request: Request) {
+async function handleRequest(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const headerSecret = request.headers.get("x-cron-secret");
 
@@ -53,8 +53,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const requestedDate = typeof body.date === "string" && body.date ? body.date : getDateString(new Date());
+  const url = new URL(request.url);
+  const queryDate = url.searchParams.get("date")?.trim();
+  const body = request.method === "GET" ? {} : ((await request.json().catch(() => ({}))) as Record<string, unknown>);
+  const requestedDate =
+    queryDate || (typeof body.date === "string" && body.date ? body.date : getDateString(new Date()));
   const targetDate = requestedDate;
   const dayName = getDayName(new Date(`${targetDate}T12:00:00`));
   const friendlyDate = getFriendlyDate(targetDate);
@@ -180,4 +183,12 @@ export async function POST(request: Request) {
     count: preparedSends.length,
     sends: preparedSends,
   });
+}
+
+export async function GET(request: Request) {
+  return handleRequest(request);
+}
+
+export async function POST(request: Request) {
+  return handleRequest(request);
 }
