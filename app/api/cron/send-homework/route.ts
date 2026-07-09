@@ -49,8 +49,10 @@ function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const headerSecret = request.headers.get("x-cron-secret");
   const vercelCronHeader = request.headers.get("x-vercel-cron");
+  const vercelCronSchedule = request.headers.get("x-vercel-cron-schedule");
+  const userAgent = request.headers.get("user-agent") || "";
 
-  if (vercelCronHeader === "1") {
+  if (vercelCronHeader === "1" || Boolean(vercelCronSchedule) || userAgent.includes("vercel-cron/1.0")) {
     return true;
   }
 
