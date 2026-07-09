@@ -45,6 +45,10 @@ function parseStudentDays(days: string | null | undefined) {
     .filter(Boolean);
 }
 
+function isHomeworkDay(dayName: string) {
+  return dayName === "Monday" || dayName === "Wednesday" || dayName === "Friday";
+}
+
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   const headerSecret = request.headers.get("x-cron-secret");
@@ -73,16 +77,38 @@ async function handleRequest(request: Request) {
   const dayName = getDayName(new Date(`${targetDate}T12:00:00`));
   const friendlyDate = getFriendlyDate(targetDate);
 
+  if (!isHomeworkDay(dayName)) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      date: targetDate,
+      day: dayName,
+      reason: "No homework is scheduled on this day",
+      count: 0,
+      sends: [],
+    });
+  }
+
   const [students, homeworkRows] = await Promise.all([
     getSupabaseStudents(),
     getSupabaseHomeworkForDate(targetDate),
   ]);
-  console.log("Homework", { homeworkRows});
+
+  if (homeworkRows.length === 0) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      date: targetDate,
+      day: dayName,
+      reason: "No homework entries were found for the requested date",
+      count: 0,
+      sends: [],
+    });
+  }
 
   const homeworkByYearLevel = new Map(
     homeworkRows.map((row) => [String(row.year_level), row]),
   );
-  console.log(" Homework By Level", { homeworkByYearLevel});
 
   const preparedSends = [] as Array<{
     studentName: string;
