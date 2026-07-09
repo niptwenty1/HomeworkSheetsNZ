@@ -77,7 +77,19 @@ async function handleRequest(request: Request) {
   const dayName = getDayName(new Date(`${targetDate}T12:00:00`));
   const friendlyDate = getFriendlyDate(targetDate);
 
+  console.info("[cron/send-homework] start", {
+    method: request.method,
+    targetDate,
+    dayName,
+  });
+
   if (!isHomeworkDay(dayName)) {
+    console.info("[cron/send-homework] skipped", {
+      targetDate,
+      dayName,
+      reason: "No homework is scheduled on this day",
+    });
+
     return NextResponse.json({
       ok: true,
       skipped: true,
@@ -95,6 +107,12 @@ async function handleRequest(request: Request) {
   ]);
 
   if (homeworkRows.length === 0) {
+    console.info("[cron/send-homework] skipped", {
+      targetDate,
+      dayName,
+      reason: "No homework entries were found for the requested date",
+    });
+
     return NextResponse.json({
       ok: true,
       skipped: true,
@@ -212,6 +230,13 @@ async function handleRequest(request: Request) {
       });
     }
   }
+
+  console.info("[cron/send-homework] complete", {
+    targetDate,
+    dayName,
+    homeworkRows: homeworkRows.length,
+    preparedSends: preparedSends.length,
+  });
 
   return NextResponse.json({
     ok: true,
