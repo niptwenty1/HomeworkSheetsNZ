@@ -37,52 +37,136 @@ function getDateString(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function getDayName(date: Date) {
-  return date.toLocaleDateString("en-NZ", { weekday: "long" });
+function getNzDateString(date: Date) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Pacific/Auckland",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(date);
 }
 
-function getSchoolDaysInWeek(referenceDate: Date): SchoolDay[] {
-  const start = new Date(referenceDate);
-  const day = start.getDay();
-  const diff = (day + 6) % 7;
-  start.setDate(start.getDate() - diff);
-
-  const days: SchoolDay[] = [];
-  for (let i = 0; i < 5; i += 1) {
-    const current = new Date(start);
-    current.setDate(start.getDate() + i);
-    const dayName = getDayName(current);
-    if (dayName === "Monday" || dayName === "Wednesday" || dayName === "Friday") {
-      days.push({
-        date: current.toLocaleDateString("en-NZ", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }),
-        dateStr: getDateString(current),
-      });
-    }
+function parseDateParts(dateStr: string) {
+  const [year, month, day] = dateStr.split("-").map((value) => Number(value));
+  if (!year || !month || !day) {
+    throw new Error(`Invalid date format: ${dateStr}`);
   }
 
-  return days;
+  return { year, month, day };
 }
 
-function getTargetYearLevels(url: URL) {
+function addDays(dateStr: string, amount: number) {
+  const { year, month, day } = parseDateParts(dateStr);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + amount);
+  return getDateString(date);
+}
+
+function getNzDayIndex(dateStr: string) {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  const weekday = new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    weekday: "long",
+  }).format(date);
+
+  const map: Record<string, number> = {
+    Monday: 0,
+    Tuesday: 1,
+    Wednesday: 2,
+    Thursday: 3,
+    Friday: 4,
+    Saturday: 5,
+    Sunday: 6,
+  };
+
+  const value = map[weekday];
+  if (value === undefined) {
+    throw new Error(`Unsupported weekday: ${weekday}`);
+  }
+
+  return value;
+}
+
+function getReferenceDateString(url: URL) {
+  const provided = url.searchParams.get("referenceDate")?.trim();
+  if (provided) {
+    return provided;
+  }
+
+  return getNzDateString(new Date());
+}
+
+function getWeekStartDateString(referenceDateStr: string) {
+  const dayIndex = getNzDayIndex(referenceDateStr);
+  const anchorDateStr = dayIndex >= 5 ? addDays(referenceDateStr, dayIndex === 5 ? 2 : 1) : referenceDateStr;
+  const anchorDayIndex = getNzDayIndex(anchorDateStr);
+  return addDays(anchorDateStr, -anchorDayIndex);
+}
+
+function getSchoolDaysFromWeekStart(weekStartDateStr: string): SchoolDay[] {
+  const dates = [
+    addDays(weekStartDateStr, 0),
+    addDays(weekStartDateStr, 2),
+    addDays(weekStartDateStr, 4),
+  ];
+
+  return dates.map((dateStr) => {
+    const date = new Date(`${dateStr}T00:00:00Z`);
+    return {
+      date: new Intl.DateTimeFormat("en-NZ", {
+        timeZone: "Pacific/Auckland",
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(date),
+      dateStr,
+    };
+  });
+}
+
+function normalizeYearLevel(level: string) {
+  const trimmed = String(level || "").trim();
+  if (!trimmed) return "";
+
+  const match = trimmed.match(/\d{1,2}/);
+  return match ? match[0] : trimmed;
+}
+
+function getTargetYearLevels(url: URL, students: Array<{ level?: string }>) {
   const single = url.searchParams.get("yearLevel")?.trim();
   if (single) {
-    return [single];
+    return [normalizeYearLevel(single)].filter(Boolean);
   }
 
   const csv = url.searchParams.get("yearLevels")?.trim();
-  if (!csv) {
-    return Array.from({ length: 10 }, (_, index) => String(index + 1));
+  if (csv) {
+    return csv
+      .split(",")
+      .map((item) => normalizeYearLevel(item))
+      .filter(Boolean);
   }
 
-  return csv
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const distinct = Array.from(
+    new Set(
+      students
+        .map((student) => normalizeYearLevel(String(student.level || "")))
+        .filter(Boolean),
+    ),
+  );
+
+  distinct.sort((a, b) => {
+    const aNum = Number(a);
+    const bNum = Number(b);
+    if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
+      return aNum - bNum;
+    }
+    return a.localeCompare(b);
+  });
+
+  return distinct;
 }
 
 function getConcurrency(url: URL) {
@@ -298,15 +382,31 @@ async function handleRequest(request: Request) {
   }
 
   const url = new URL(request.url);
-  const referenceDateParam = url.searchParams.get("referenceDate");
-  const referenceDate = referenceDateParam ? new Date(referenceDateParam) : new Date();
-  const yearLevels = getTargetYearLevels(url);
+  const referenceDateStr = getReferenceDateString(url);
+  const weekStartDateStr = getWeekStartDateString(referenceDateStr);
+  const referenceDate = new Date(`${weekStartDateStr}T12:00:00Z`);
   const concurrency = getConcurrency(url);
-  const schoolDays = getSchoolDaysInWeek(referenceDate);
+  const schoolDays = getSchoolDaysFromWeekStart(weekStartDateStr);
 
   try {
-    const referenceDateStr = getDateString(referenceDate);
     const students = await getSupabaseStudents();
+    const yearLevels = getTargetYearLevels(url, students);
+
+    if (yearLevels.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        referenceDate: weekStartDateStr,
+        schoolDays: schoolDays.map((day) => day.dateStr),
+        yearLevels: [],
+        concurrency,
+        totalYears: 0,
+        generatedTotal: 0,
+        completed: 0,
+        failed: 0,
+        results: [],
+        message: "No year levels found in signups.",
+      });
+    }
 
     const results = await runWithConcurrency(yearLevels, concurrency, async (yearLevel) => {
       return processYearLevel({
@@ -323,7 +423,7 @@ async function handleRequest(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      referenceDate: referenceDateStr,
+      referenceDate: weekStartDateStr,
       schoolDays: schoolDays.map((day) => day.dateStr),
       yearLevels,
       concurrency,
