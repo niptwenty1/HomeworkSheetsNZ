@@ -91,11 +91,23 @@ function getNzDayIndex(dateStr: string) {
 
 function getReferenceDateString(url: URL) {
   const provided = url.searchParams.get("referenceDate")?.trim();
-  if (provided) {
-    return provided;
+  if (!provided) {
+    return getNzDateString(new Date());
   }
 
-  return getNzDateString(new Date());
+  // Accept common manual formats and normalize to YYYY-MM-DD.
+  const normalized = provided.replace(/\//g, "-");
+  const ymd = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) {
+    return normalized;
+  }
+
+  const parsed = new Date(normalized);
+  if (!Number.isNaN(parsed.getTime())) {
+    return getDateString(parsed);
+  }
+
+  throw new Error(`Invalid referenceDate: ${provided}. Use YYYY-MM-DD.`);
 }
 
 function getWeekStartDateString(referenceDateStr: string) {
@@ -135,20 +147,7 @@ function normalizeYearLevel(level: string) {
   return match ? match[0] : trimmed;
 }
 
-function getTargetYearLevels(url: URL, students: Array<{ level?: string }>) {
-  const single = url.searchParams.get("yearLevel")?.trim();
-  if (single) {
-    return [normalizeYearLevel(single)].filter(Boolean);
-  }
-
-  const csv = url.searchParams.get("yearLevels")?.trim();
-  if (csv) {
-    return csv
-      .split(",")
-      .map((item) => normalizeYearLevel(item))
-      .filter(Boolean);
-  }
-
+function getTargetYearLevels(students: Array<{ level?: string }>) {
   const distinct = Array.from(
     new Set(
       students
@@ -381,16 +380,28 @@ async function handleRequest(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const url = new URL(request.url);
-  const referenceDateStr = getReferenceDateString(url);
-  const weekStartDateStr = getWeekStartDateString(referenceDateStr);
-  const referenceDate = new Date(`${weekStartDateStr}T12:00:00Z`);
-  const concurrency = getConcurrency(url);
-  const schoolDays = getSchoolDaysFromWeekStart(weekStartDateStr);
-
   try {
+    const url = new URL(request.url);
+    const referenceDateStr = getReferenceDateString(url);
+    const weekStartDateStr = getWeekStartDateString(referenceDateStr);
+    const referenceDate = new Date(`${weekStartDateStr}T12:00:00Z`);
+    const concurrency = getConcurrency(url);
+    const schoolDays = getSchoolDaysFromWeekStart(weekStartDateStr);
+
+    console.info("[cron/generate-weekly] start", {
+      referenceDate: weekStartDateStr,
+      concurrency,
+      method: request.method,
+    });
+
     const students = await getSupabaseStudents();
-    const yearLevels = getTargetYearLevels(url, students);
+    const yearLevels = getTargetYearLevels(students);
+
+    console.info("[cron/generate-weekly] selected-levels", {
+      signupCount: students.length,
+      yearLevels,
+      totalYears: yearLevels.length,
+    });
 
     if (yearLevels.length === 0) {
       return NextResponse.json({
