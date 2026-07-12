@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/generate-weekly-worker",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 23 * * *"
     },
     {
       "path": "/api/cron/send-homework",
