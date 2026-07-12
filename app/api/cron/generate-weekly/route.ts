@@ -68,32 +68,22 @@ function getBaseUrl(request: Request) {
   return `${url.protocol}//${url.host}`;
 }
 
-async function dispatchWorkerTask(workerUrl: string, cronSecret?: string) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2000);
+async function runWorkerTask(workerUrl: string, cronSecret?: string) {
+  const response = await fetch(workerUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-vercel-cron": "1",
+      ...(cronSecret ? { "x-cron-secret": cronSecret } : {}),
+    },
+  });
 
-  try {
-    await fetch(workerUrl, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-vercel-cron": "1",
-        ...(cronSecret ? { "x-cron-secret": cronSecret } : {}),
-      },
-      signal: controller.signal,
-    });
-
-    return { accepted: true as const };
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      // The worker request was initiated and intentionally timed out client-side.
-      return { accepted: true as const };
-    }
-
-    return { accepted: false as const };
-  } finally {
-    clearTimeout(timeout);
-  }
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return {
+    ok: response.ok,
+    status: response.status,
+    payload,
+  };
 }
 
 async function handleRequest(request: Request) {
@@ -113,17 +103,44 @@ async function handleRequest(request: Request) {
 
     const dispatches = queuedTasks.map((task) => {
       const workerUrl = `${baseUrl}/api/cron/generate-weekly-worker?queueId=${task.id}&referenceDate=${referenceDateStr}&yearLevel=${task.year_level}`;
-      return dispatchWorkerTask(workerUrl, cronSecret);
+      return runWorkerTask(workerUrl, cronSecret);
     });
 
-    const dispatchResults = await Promise.all(dispatches);
-    const dispatched = dispatchResults.filter((result) => result.accepted).length;
+    const dispatchResults = await Promise.allSettled(dispatches);
+    const workerResults = dispatchResults.map((result, index) => {
+      if (result.status === "fulfilled") {
+        return {
+          queueId: queuedTasks[index].id,
+          yearLevel: queuedTasks[index].year_level,
+          ok: result.value.ok,
+          statusCode: result.value.status,
+          status: String(result.value.payload.status || "unknown"),
+          generated: Number(result.value.payload.generated || 0),
+          error: result.value.payload.error ? String(result.value.payload.error) : null,
+        };
+      }
+
+      return {
+        queueId: queuedTasks[index].id,
+        yearLevel: queuedTasks[index].year_level,
+        ok: false,
+        statusCode: 0,
+        status: "dispatch-error",
+        generated: 0,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      };
+    });
+
+    const completed = workerResults.filter((result) => result.ok).length;
+    const failed = workerResults.length - completed;
 
     return NextResponse.json({
       ok: true,
       referenceDate: referenceDateStr,
       queued: queuedTasks.length,
-      dispatched,
+      completed,
+      failed,
+      results: workerResults,
       tasks: queuedTasks,
     });
   } catch (error) {
