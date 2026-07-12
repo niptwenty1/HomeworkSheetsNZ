@@ -108,7 +108,7 @@ async function logUsage(params: {
   ]);
 }
 
-export async function POST(request: Request) {
+async function handleRequest(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
@@ -411,4 +411,12 @@ export async function POST(request: Request) {
       { status: 502 },
     );
   }
+}
+
+export async function GET(request: Request) {
+  return handleRequest(request);
+}
+
+export async function POST(request: Request) {
+  return handleRequest(request);
 }
