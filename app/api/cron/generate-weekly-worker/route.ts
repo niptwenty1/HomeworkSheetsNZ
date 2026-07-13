@@ -185,6 +185,14 @@ async function handleRequest(request: Request) {
     return NextResponse.json({ ok: true, message: "No queued tasks" });
   }
 
+  console.info("[generate-weekly-worker] Task selected", {
+    queueId: task.id,
+    yearLevel: task.year_level,
+    referenceDate: task.reference_date,
+    status: task.status,
+    attempts: task.attempts,
+  });
+
   if (task.attempts >= MAX_ATTEMPTS && task.status !== "queued") {
     return NextResponse.json({ ok: false, error: "Task exceeded retry attempts" }, { status: 409 });
   }
@@ -206,6 +214,10 @@ async function handleRequest(request: Request) {
     .single();
 
   if (claimError || !claimed) {
+    console.warn("[generate-weekly-worker] Failed to claim task", {
+      queueId: task.id,
+      claimError: claimError?.message || null,
+    });
     return NextResponse.json({ ok: false, error: "Unable to claim task" }, { status: 409 });
   }
 
@@ -216,6 +228,14 @@ async function handleRequest(request: Request) {
     const referenceDate = new Date(`${referenceDateStr}T12:00:00`);
     const schoolDays = getSchoolDaysInWeek(referenceDate);
     const dayDates = schoolDays.map((day) => day.dateStr);
+
+    console.info("[generate-weekly-worker] Starting generation", {
+      queueId: task.id,
+      yearLevel,
+      referenceDate: referenceDateStr,
+      schoolDaysCount: schoolDays.length,
+      attempts: nextAttempts,
+    });
 
     const { data: existingRows, error: existingError } = await supabase
       .from("homework_entries")
@@ -229,6 +249,14 @@ async function handleRequest(request: Request) {
 
     const existingDates = new Set((existingRows || []).map((row) => String(row.date || "")));
     const missingDays = schoolDays.filter((day) => !existingDates.has(day.dateStr));
+
+    console.info("[generate-weekly-worker] Existing homework check", {
+      queueId: task.id,
+      yearLevel,
+      referenceDate: referenceDateStr,
+      existingRows: existingDates.size,
+      missingDaysCount: missingDays.length,
+    });
 
     if (missingDays.length === 0) {
       const finishedAt = new Date().toISOString();
@@ -316,6 +344,16 @@ async function handleRequest(request: Request) {
       throw new Error(upsertError.message);
     }
 
+    console.info("[generate-weekly-worker] Generation succeeded", {
+      queueId: task.id,
+      yearLevel,
+      generatedRows: rows.length,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+      model: usage.model,
+    });
+
     const finishedAt = new Date().toISOString();
     await supabase
       .from("homework_generation_queue")
@@ -363,6 +401,16 @@ async function handleRequest(request: Request) {
     const message = error instanceof Error ? error.message : "Unknown worker error";
     const shouldRetry = nextAttempts < MAX_ATTEMPTS;
     const now = new Date().toISOString();
+
+    console.error("[generate-weekly-worker] Generation failed", {
+      queueId: task.id,
+      yearLevel,
+      referenceDate: referenceDateStr,
+      attempts: nextAttempts,
+      shouldRetry,
+      errorMessage: message,
+      stack: error instanceof Error ? error.stack : null,
+    });
 
     await supabase
       .from("homework_generation_queue")

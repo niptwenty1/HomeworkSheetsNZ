@@ -43,6 +43,32 @@ export type WeeklyHomeworkGenerationResult = {
   usage: ClaudeGenerationUsage;
 };
 
+function clip(value: string, max = 400) {
+  if (!value) return "";
+  if (value.length <= max) return value;
+  return `${value.slice(0, max)}...<truncated ${value.length - max} chars>`;
+}
+
+function createParseErrorContext(payload: string, parseError: Error) {
+  const message = String(parseError.message || "Unknown JSON parse error");
+  const match = message.match(/position\s+(\d+)/i);
+  const position = match ? Number.parseInt(match[1], 10) : -1;
+
+  if (Number.isNaN(position) || position < 0 || position >= payload.length) {
+    return {
+      position: null,
+      snippet: clip(payload, 500),
+    };
+  }
+
+  const start = Math.max(0, position - 120);
+  const end = Math.min(payload.length, position + 120);
+  return {
+    position,
+    snippet: clip(payload.slice(start, end), 500),
+  };
+}
+
 function getMaxTokens() {
   const raw = process.env.CLAUDE_MAX_TOKENS || process.env.MAX_TOKENS || "4000";
   const parsed = Number.parseInt(String(raw).trim(), 10);
@@ -66,6 +92,7 @@ export async function generateWeeklyHomeworkWithUsage({
   students?: Array<{ name?: string; email?: string; level?: string; difficultyLevel?: string; days?: string }>;
 }): Promise<WeeklyHomeworkGenerationResult> {
   const normalizedYearLevel = String(yearLevel || 6);
+  const requestStartedAt = Date.now();
   const datelistStr = schoolDays
     .map((day, index) => `${index + 1}. ${day.date}`)
     .join("\n");
@@ -223,6 +250,15 @@ Each object must follow this exact structure:
   const maxTokens = getMaxTokens();
   const model = process.env.CLAUDE_MODEL || "claude-3-5-sonnet-latest";
 
+  console.info("[homeworkGeneration] Claude request start", {
+    yearLevel: normalizedYearLevel,
+    schoolDaysCount: schoolDays.length,
+    curriculumChars: curriculumContent.length,
+    recentTopicsCount: topics.length,
+    model,
+    maxTokens,
+  });
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -237,8 +273,20 @@ Each object must follow this exact structure:
     }),
   });
 
+  console.info("[homeworkGeneration] Claude request finished", {
+    yearLevel: normalizedYearLevel,
+    durationMs: Date.now() - requestStartedAt,
+    status: response.status,
+    ok: response.ok,
+  });
+
   if (!response.ok) {
     const errorText = await response.text();
+    console.error("[homeworkGeneration] Claude API returned error response", {
+      yearLevel: normalizedYearLevel,
+      status: response.status,
+      errorPreview: clip(errorText, 800),
+    });
     throw new Error(`Claude API error: ${response.status} ${errorText}`);
   }
 
@@ -252,11 +300,19 @@ Each object must follow this exact structure:
   };
 
   if (data.error) {
+    console.error("[homeworkGeneration] Claude API error object", {
+      yearLevel: normalizedYearLevel,
+      error: data.error,
+    });
     throw new Error(`Claude API error: ${JSON.stringify(data.error)}`);
   }
 
   const text = data.content?.[0]?.text?.trim() || "";
   if (!text) {
+    console.error("[homeworkGeneration] Claude returned empty content", {
+      yearLevel: normalizedYearLevel,
+      usage: data.usage || null,
+    });
     throw new Error("Claude returned no content.");
   }
 
@@ -269,12 +325,51 @@ Each object must follow this exact structure:
   const arrayStart = cleaned.indexOf("[");
   const arrayEnd = cleaned.lastIndexOf("]");
   if (arrayStart === -1 || arrayEnd === -1) {
+    console.error("[homeworkGeneration] JSON array delimiters missing", {
+      yearLevel: normalizedYearLevel,
+      cleanedLength: cleaned.length,
+      responsePreview: clip(cleaned, 800),
+    });
     throw new Error("Could not find a JSON array in the Claude response.");
   }
 
-  const parsed = JSON.parse(cleaned.slice(arrayStart, arrayEnd + 1)) as ClaudeHomeworkEntry[];
+  const payload = cleaned.slice(arrayStart, arrayEnd + 1);
+  let parsed: ClaudeHomeworkEntry[];
+  try {
+    parsed = JSON.parse(payload) as ClaudeHomeworkEntry[];
+  } catch (error) {
+    const parseError = error instanceof Error ? error : new Error(String(error));
+    const context = createParseErrorContext(payload, parseError);
+    console.error("[homeworkGeneration] Failed to parse Claude JSON", {
+      yearLevel: normalizedYearLevel,
+      cleanedLength: cleaned.length,
+      payloadLength: payload.length,
+      parseError: parseError.message,
+      parsePosition: context.position,
+      payloadSnippet: context.snippet,
+      fullResponsePreview: clip(cleaned, 800),
+    });
+    throw new Error(`Claude returned malformed JSON for Year ${normalizedYearLevel}: ${parseError.message}`);
+  }
+
+  if (parsed.length !== schoolDays.length) {
+    console.warn("[homeworkGeneration] Parsed array length does not match school days", {
+      yearLevel: normalizedYearLevel,
+      expected: schoolDays.length,
+      actual: parsed.length,
+    });
+  }
+
   const inputTokens = Number(data.usage?.input_tokens || 0);
   const outputTokens = Number(data.usage?.output_tokens || 0);
+
+  console.info("[homeworkGeneration] Claude response parsed", {
+    yearLevel: normalizedYearLevel,
+    entries: parsed.length,
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+  });
 
   return {
     entries: parsed,
