@@ -49,19 +49,46 @@ function clip(value: string, max = 400) {
   return `${value.slice(0, max)}...<truncated ${value.length - max} chars>`;
 }
 
+function countChar(value: string, char: string) {
+  let count = 0;
+  for (const c of value) {
+    if (c === char) count += 1;
+  }
+  return count;
+}
+
+function buildJsonShapeStats(payload: string) {
+  const openCurly = countChar(payload, "{");
+  const closeCurly = countChar(payload, "}");
+  const openSquare = countChar(payload, "[");
+  const closeSquare = countChar(payload, "]");
+
+  return {
+    openCurly,
+    closeCurly,
+    openSquare,
+    closeSquare,
+    curlyBalance: openCurly - closeCurly,
+    squareBalance: openSquare - closeSquare,
+    startsWithArray: payload.trimStart().startsWith("["),
+    endsWithArray: payload.trimEnd().endsWith("]"),
+  };
+}
+
 function createParseErrorContext(payload: string, parseError: Error) {
   const message = String(parseError.message || "Unknown JSON parse error");
   const match = message.match(/position\s+(\d+)/i);
   const position = match ? Number.parseInt(match[1], 10) : -1;
 
-  if (Number.isNaN(position) || position < 0 || position >= payload.length) {
+  if (Number.isNaN(position) || position < 0 || position > payload.length) {
     return {
       position: null,
       snippet: clip(payload, 500),
     };
   }
 
-  const start = Math.max(0, position - 120);
+  const safePosition = Math.min(position, payload.length - 1);
+  const start = Math.max(0, safePosition - 120);
   const end = Math.min(payload.length, position + 120);
   return {
     position,
@@ -293,6 +320,8 @@ Each object must follow this exact structure:
   const data = await response.json() as {
     content?: Array<{ text?: string }>;
     error?: unknown;
+    stop_reason?: string;
+    stop_sequence?: string | null;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
@@ -308,6 +337,19 @@ Each object must follow this exact structure:
   }
 
   const text = data.content?.[0]?.text?.trim() || "";
+  const inputTokens = Number(data.usage?.input_tokens || 0);
+  const outputTokens = Number(data.usage?.output_tokens || 0);
+
+  console.info("[homeworkGeneration] Claude response metadata", {
+    yearLevel: normalizedYearLevel,
+    stopReason: data.stop_reason || null,
+    stopSequence: data.stop_sequence || null,
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    textLength: text.length,
+  });
+
   if (!text) {
     console.error("[homeworkGeneration] Claude returned empty content", {
       yearLevel: normalizedYearLevel,
@@ -334,6 +376,7 @@ Each object must follow this exact structure:
   }
 
   const payload = cleaned.slice(arrayStart, arrayEnd + 1);
+  const payloadShape = buildJsonShapeStats(payload);
   let parsed: ClaudeHomeworkEntry[];
   try {
     parsed = JSON.parse(payload) as ClaudeHomeworkEntry[];
@@ -346,7 +389,17 @@ Each object must follow this exact structure:
       payloadLength: payload.length,
       parseError: parseError.message,
       parsePosition: context.position,
+      payloadShape,
+      likelyTruncated:
+        (context.position === payload.length || parseError.message.includes(`position ${payload.length}`)) &&
+        (payloadShape.curlyBalance !== 0 || payloadShape.squareBalance !== 0),
+      stopReason: data.stop_reason || null,
+      stopSequence: data.stop_sequence || null,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
       payloadSnippet: context.snippet,
+      payloadTailPreview: clip(payload.slice(Math.max(0, payload.length - 600)), 900),
       fullResponsePreview: clip(cleaned, 800),
     });
     throw new Error(`Claude returned malformed JSON for Year ${normalizedYearLevel}: ${parseError.message}`);
@@ -359,9 +412,6 @@ Each object must follow this exact structure:
       actual: parsed.length,
     });
   }
-
-  const inputTokens = Number(data.usage?.input_tokens || 0);
-  const outputTokens = Number(data.usage?.output_tokens || 0);
 
   console.info("[homeworkGeneration] Claude response parsed", {
     yearLevel: normalizedYearLevel,
