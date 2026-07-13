@@ -97,10 +97,10 @@ function createParseErrorContext(payload: string, parseError: Error) {
 }
 
 function getMaxTokens() {
-  const raw = process.env.CLAUDE_MAX_TOKENS || process.env.MAX_TOKENS || "4000";
+  const raw = process.env.CLAUDE_MAX_TOKENS || process.env.MAX_TOKENS || "6500";
   const parsed = Number.parseInt(String(raw).trim(), 10);
   if (Number.isNaN(parsed) || parsed <= 0) {
-    return 4000;
+    return 6500;
   }
   return parsed;
 }
