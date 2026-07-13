@@ -2,6 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import getSupabaseServerClient from "../../lib/supabaseServer";
 import { syncSignupToMailerLite } from "../../lib/mailerlite";
+import { sendTelegramMessage } from "../../lib/telegram";
 
 type SignupPayload = {
   childName?: unknown;
@@ -32,6 +33,49 @@ const validYearLevels = new Set([
   "9",
   "10",
 ]);
+
+function parseBooleanEnv(value: string | undefined, defaultValue: boolean) {
+  if (value === undefined) return defaultValue;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return defaultValue;
+}
+
+async function sendSignupTelegramAlert(params: {
+  childName: string;
+  yearLevel: string;
+  email: string;
+  parentName: string;
+  referrerName: string;
+}) {
+  const telegramEnabled = parseBooleanEnv(
+    process.env.TELEGRAM_SIGNUP_ALERTS_ENABLED ?? process.env.TELEGRAM_NOTIFICATIONS_ENABLED,
+    false,
+  );
+
+  if (!telegramEnabled) {
+    return;
+  }
+
+  const lines = [
+    "HomeWorksheets new signup",
+    `Child: ${params.childName}`,
+    `Year: ${params.yearLevel}`,
+    `Parent: ${params.parentName}`,
+    `Email: ${params.email}`,
+    params.referrerName ? `Referrer: ${params.referrerName}` : "",
+    `Time (UTC): ${new Date().toISOString()}`,
+  ].filter(Boolean);
+
+  const result = await sendTelegramMessage({
+    text: lines.join("\n"),
+  });
+
+  if (!result.ok) {
+    throw new Error(result.errors.join("; ") || "Telegram send failed");
+  }
+}
 
 
 export async function POST(request: Request) {
@@ -101,6 +145,19 @@ export async function POST(request: Request) {
     if (error) {
       console.error("Supabase insert error:", error);
       throw new Error(`Supabase insert failed: ${error.message}`);
+    }
+
+    try {
+      await sendSignupTelegramAlert({
+        childName,
+        yearLevel,
+        email,
+        parentName,
+        referrerName,
+      });
+    } catch (telegramError) {
+      const message = telegramError instanceof Error ? telegramError.message : String(telegramError);
+      console.error("Telegram signup alert failed:", message);
     }
 
     const mailerLiteResult = await syncSignupToMailerLite({

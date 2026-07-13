@@ -61,6 +61,12 @@ Set the following in your deployment environment and in `.env` for local testing
 - `FROM_EMAIL` — sender email (used in the `From` field)
 - `FROM_NAME` — optional display name shown in the `From` field (e.g. `Miss Mum - Home School`)
 - `REPLY_TO_EMAIL` — reply-to address
+- `EMAIL_NOTIFICATIONS_ENABLED` — optional channel toggle for cron summaries (`true` by default)
+- `TELEGRAM_NOTIFICATIONS_ENABLED` — enable Telegram cron summaries (`false` by default)
+- `TELEGRAM_SIGNUP_ALERTS_ENABLED` — enable Telegram alert on each successful signup (defaults to `TELEGRAM_NOTIFICATIONS_ENABLED`)
+- `TELEGRAM_BOT_TOKEN` — Telegram bot token from BotFather
+- `TELEGRAM_CHAT_ID` — single Telegram chat/group ID for notifications
+- `TELEGRAM_CHAT_IDS` — optional comma-separated list of chat/group IDs (overrides `TELEGRAM_CHAT_ID`)
 - `CRON_SECRET` — secret used by cron routes to authorize Vercel scheduled calls
 - `HOMEWORK_SIGNUP_SECRET` — existing secret used for protected teacher actions (also used for enqueueing resends)
 - `COMPLETE_SECRET_KEY` — secret used to sign completion links (used by `app/api/register-completion/route.ts`)

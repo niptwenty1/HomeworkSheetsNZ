@@ -1,4 +1,5 @@
 import { sendHomeworkEmail } from "./email";
+import { sendTelegramMessage } from "./telegram";
 
 type CronSummaryKind = "send-homework" | "generate-weekly-worker";
 
@@ -18,6 +19,14 @@ export type CronSummaryEmailInput = {
   yearLevel?: string;
   referenceDate?: string;
 };
+
+function parseBooleanEnv(value: string | undefined, defaultValue: boolean) {
+  if (value === undefined) return defaultValue;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return defaultValue;
+}
 
 function escapeHtml(value: string | number | null | undefined) {
   return String(value || "")
@@ -94,10 +103,40 @@ function buildSummaryHtml(input: CronSummaryEmailInput) {
 </html>`;
 }
 
+function buildSummaryText(input: CronSummaryEmailInput) {
+  const counts = input.counts || {};
+  const lines = [
+    `HomeWorksheets cron summary`,
+    `Event: ${input.kind}`,
+    `Status: ${input.status}`,
+    `Date: ${input.targetDate}`,
+    input.dayName ? `Day: ${input.dayName}` : "",
+    counts.total !== undefined ? `Total: ${counts.total}` : "",
+    counts.sent !== undefined ? `Sent: ${counts.sent}` : "",
+    counts.failed !== undefined ? `Failed: ${counts.failed}` : "",
+    counts.skipped !== undefined ? `Skipped: ${counts.skipped}` : "",
+    counts.generated !== undefined ? `Generated: ${counts.generated}` : "",
+    input.yearLevel ? `Year level: ${input.yearLevel}` : "",
+    input.referenceDate ? `Reference date: ${input.referenceDate}` : "",
+  ].filter(Boolean);
+
+  const details = (input.details || []).filter(Boolean);
+  if (details.length > 0) {
+    lines.push("Details:");
+    for (const detail of details) {
+      lines.push(`- ${detail}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export async function sendCronSummaryEmail(input: CronSummaryEmailInput) {
-  const to = process.env.FROM_EMAIL;
-  if (!to) {
-    console.info("[cron-summary] skipped: FROM_EMAIL is not configured", {
+  const emailEnabled = parseBooleanEnv(process.env.EMAIL_NOTIFICATIONS_ENABLED, true);
+  const telegramEnabled = parseBooleanEnv(process.env.TELEGRAM_NOTIFICATIONS_ENABLED, false);
+
+  if (!emailEnabled && !telegramEnabled) {
+    console.info("[cron-summary] skipped: no notification channels enabled", {
       kind: input.kind,
       status: input.status,
     });
@@ -106,21 +145,76 @@ export async function sendCronSummaryEmail(input: CronSummaryEmailInput) {
 
   const subject = buildSummarySubject(input);
   const html = buildSummaryHtml(input);
+  const text = buildSummaryText(input);
 
-  try {
-    await sendHomeworkEmail({
-      to,
-      subject,
-      html,
-      from: process.env.FROM_EMAIL,
-      replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[cron-summary] failed to send summary email", {
+  const operations: Array<Promise<void>> = [];
+
+  if (emailEnabled) {
+    const to = process.env.FROM_EMAIL;
+    if (!to) {
+      console.info("[cron-summary] email skipped: FROM_EMAIL is not configured", {
+        kind: input.kind,
+        status: input.status,
+      });
+    } else {
+      operations.push(
+        sendHomeworkEmail({
+          to,
+          subject,
+          html,
+          from: process.env.FROM_EMAIL,
+          replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL,
+        }).then(() => {
+          console.info("[cron-summary] email notification sent", {
+            kind: input.kind,
+            status: input.status,
+          });
+        }),
+      );
+    }
+  }
+
+  if (telegramEnabled) {
+    operations.push(
+      sendTelegramMessage({ text }).then((result) => {
+        if (!result.ok) {
+          throw new Error(result.errors.join("; ") || "Telegram send failed");
+        }
+
+        console.info("[cron-summary] telegram notification sent", {
+          kind: input.kind,
+          status: input.status,
+          chatsSent: result.sent,
+        });
+      }),
+    );
+  }
+
+  if (operations.length === 0) {
+    console.info("[cron-summary] skipped: channel configuration missing", {
       kind: input.kind,
       status: input.status,
-      error: message,
+    });
+    return;
+  }
+
+  const results = await Promise.allSettled(operations);
+  for (const result of results) {
+    if (result.status === "rejected") {
+      const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      console.error("[cron-summary] failed to send notification", {
+        kind: input.kind,
+        status: input.status,
+        error: message,
+      });
+    }
+  }
+
+  const allFailed = results.every((result) => result.status === "rejected");
+  if (allFailed) {
+    console.error("[cron-summary] all notification channels failed", {
+      kind: input.kind,
+      status: input.status,
     });
   }
 }
