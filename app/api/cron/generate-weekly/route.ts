@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
+import { sendCronSummaryEmail } from "../../../lib/cronSummaryEmail";
 import { generateWeeklyHomeworkWithUsage } from "../../../lib/homeworkGeneration";
 import { getSupabaseCurriculumContent, getSupabaseRecentHomeworkTopics, getSupabaseStudents } from "../../../lib/supabaseHomeworkData";
 import getSupabaseServerClient from "../../../lib/supabaseServer";
@@ -380,9 +381,11 @@ async function handleRequest(request: Request) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  const url = new URL(request.url);
+  let referenceDateStr = "";
+
   try {
-    const url = new URL(request.url);
-    const referenceDateStr = getReferenceDateString(url);
+    referenceDateStr = getReferenceDateString(url);
     const weekStartDateStr = getWeekStartDateString(referenceDateStr);
     const referenceDate = new Date(`${weekStartDateStr}T12:00:00Z`);
     const concurrency = getConcurrency(url);
@@ -404,6 +407,20 @@ async function handleRequest(request: Request) {
     });
 
     if (yearLevels.length === 0) {
+      await sendCronSummaryEmail({
+        kind: "generate-weekly",
+        targetDate: weekStartDateStr,
+        status: "no-year-levels",
+        referenceDate: weekStartDateStr,
+        counts: {
+          total: 0,
+          generated: 0,
+          failed: 0,
+          skipped: 1,
+        },
+        details: ["No year levels found in signups."],
+      });
+
       return NextResponse.json({
         ok: true,
         referenceDate: weekStartDateStr,
@@ -431,6 +448,31 @@ async function handleRequest(request: Request) {
     const completed = results.filter((result) => result.status !== "failed").length;
     const failed = results.filter((result) => result.status === "failed").length;
     const generatedTotal = results.reduce((sum, result) => sum + result.generated, 0);
+    const generatedYears = results.filter((result) => result.status === "generated");
+    const skippedYears = results.filter((result) => result.status === "skipped-existing");
+    const failedYears = results.filter((result) => result.status === "failed");
+
+    await sendCronSummaryEmail({
+      kind: "generate-weekly",
+      targetDate: weekStartDateStr,
+      status: failed > 0 ? "partial-failure" : "complete",
+      referenceDate: weekStartDateStr,
+      counts: {
+        total: yearLevels.length,
+        generated: generatedTotal,
+        failed,
+        skipped: skippedYears.length,
+      },
+      details: [
+        `Concurrency: ${concurrency}`,
+        `Year levels processed: ${yearLevels.join(", ")}`,
+        `Completed: ${completed}`,
+        `Failed: ${failed}`,
+        ...generatedYears.map((result) => `Generated Year ${result.yearLevel}: ${result.generated} rows`),
+        ...skippedYears.map((result) => `Skipped Year ${result.yearLevel}: rows already existed`),
+        ...failedYears.map((result) => `Failed Year ${result.yearLevel}: ${result.error || "Unknown error"}`),
+      ],
+    });
 
     return NextResponse.json({
       ok: true,
@@ -446,6 +488,23 @@ async function handleRequest(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate weekly homework";
+
+    if (referenceDateStr) {
+      const weekStartDateStr = getWeekStartDateString(referenceDateStr);
+      await sendCronSummaryEmail({
+        kind: "generate-weekly",
+        targetDate: weekStartDateStr,
+        status: "failed",
+        referenceDate: weekStartDateStr,
+        counts: {
+          total: 0,
+          generated: 0,
+          failed: 1,
+        },
+        details: [message],
+      });
+    }
+
     return NextResponse.json({ ok: false, error: message }, { status: 502 });
   }
 }
