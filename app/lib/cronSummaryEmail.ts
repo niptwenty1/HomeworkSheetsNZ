@@ -1,7 +1,7 @@
 import { sendHomeworkEmail } from "./email";
 import { sendTelegramMessage } from "./telegram";
 
-type CronSummaryKind = "send-homework" | "generate-weekly-worker";
+type CronSummaryKind = "send-homework" | "generate-weekly";
 
 export type CronSummaryEmailInput = {
   kind: CronSummaryKind;

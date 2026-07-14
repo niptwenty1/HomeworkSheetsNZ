@@ -105,6 +105,124 @@ function getMaxTokens() {
   return parsed;
 }
 
+function dedupeAndLimit(values: string[], limit = 8) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+    if (result.length >= limit) break;
+  }
+
+  return result;
+}
+
+function buildRecentTopicsSummary(
+  topics: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingTopic?: string; grammarTopic?: string }>,
+) {
+  if (!topics.length) {
+    return "No recent topics provided.";
+  }
+
+  const maths = dedupeAndLimit(topics.map((item) => String(item.mathsTopic || "")));
+  const reading = dedupeAndLimit(topics.map((item) => String(item.readingTopic || "")));
+  const writing = dedupeAndLimit(topics.map((item) => String(item.writingTopic || "")));
+  const grammar = dedupeAndLimit(topics.map((item) => String(item.grammarTopic || "")));
+
+  const lines = [
+    maths.length ? `- Maths: ${maths.join("; ")}` : "",
+    reading.length ? `- Reading: ${reading.join("; ")}` : "",
+    writing.length ? `- Writing: ${writing.join("; ")}` : "",
+    grammar.length ? `- Grammar: ${grammar.join("; ")}` : "",
+  ].filter(Boolean);
+
+  return lines.length ? lines.join("\n") : "No recent topics provided.";
+}
+
+function buildBaseInstructionBlock() {
+  return `BASE RULES
+You generate weekly homework for New Zealand primary/intermediate students.
+Output must be valid JSON only (no markdown, no code fences, no extra text).
+
+CHILD SAFETY (STRICT)
+All content must be safe and age-appropriate.
+Do not include sexual content, romantic/relationship advice, suggestive material, violence, weapons use, assault, abuse, self-harm, suicide, dangerous trends, drugs, alcohol, vaping, smoking, gambling, hate speech, extremist content, demeaning stereotypes, frightening/disturbing scenarios, or adult-only themes.
+Use neutral, child-friendly language. If a topic becomes mature, replace it with a safe school-appropriate alternative.
+
+VARIETY ACROSS THE WEEK
+Vary maths topics, reading topics, reading genres, writing tasks, and grammar focus areas.
+
+READING DIVERSITY
+Use a wide mix of topics such as science, history, geography, technology, inventions, environment, arts, sports, health, culture, engineering, oceans, climate, and global everyday life.
+Do not make most passages about New Zealand/kiwi/local topics; use New Zealand topics occasionally only.
+
+REPETITION CONTROL
+Avoid repeating recent reading topics/passages, writing prompts, grammar exercises, and maths contexts.
+If revisiting a skill, use a clearly different scenario/context.
+
+OUTPUT SCHEMA (EXACT)
+Return a JSON array with one object per listed school day, in the same order.
+Each object must match this structure exactly:
+{
+  "date": "Monday 1 April 2026",
+  "maths": {
+    "topic": "Topic name",
+    "instructions": "Brief instructions for students",
+    "questions": ["Q1","Q2","Q3","Q4","Q5","Q6","Q7","Q8"],
+    "word_problem": "A multi-step word problem"
+  },
+  "english": {
+    "reading_passage": {
+      "title": "Passage title",
+      "text": "passage suitable for the selected year level, maximum 200 words",
+      "questions": ["Question 1","Question 2","Question 3","Question 4"]
+    },
+    "writing_task": {
+      "type": "Creative writing or Formal writing (alternate across the week)",
+      "prompt": "The writing prompt",
+      "word_count": "Year-appropriate number of words .. maximum 100-150 words"
+    },
+    "grammar_focus": {
+      "topic": "Grammar topic",
+      "instruction": "What students need to do",
+      "exercise": "The grammar exercise (3-5 sentences or tasks)"
+    }
+  }
+}`;
+}
+
+function buildYearContextBlock(yearLevel: string, curriculumSection: string) {
+  return `YEAR CONTEXT
+Year level: ${yearLevel}
+You are an experienced Year ${yearLevel} teacher in New Zealand.
+Each homework set should take approximately 20-30 minutes and align with the New Zealand Curriculum for Year ${yearLevel}.
+The curriculum represents end-of-year expectations. Sequence work from foundational to more advanced learning as the school year progresses. Do not assume students have mastered later-year content too early.
+
+${curriculumSection || "No additional curriculum content provided."}`;
+}
+
+function buildDynamicRequestBlock(params: {
+  schoolDays: SchoolDay[];
+  datelistStr: string;
+  recentTopicsSummary: string;
+}) {
+  return `REQUEST
+Generate a complete homework set for every listed school day.
+
+School days:
+${params.datelistStr}
+
+Recent topics to avoid repeating:
+${params.recentTopicsSummary}
+
+Return ONLY a valid JSON array with exactly ${params.schoolDays.length} objects in the same order as the listed school days.`;
+}
+
 export async function generateWeeklyHomeworkWithUsage({
   yearLevel,
   schoolDays,
@@ -129,145 +247,18 @@ export async function generateWeeklyHomeworkWithUsage({
     : "";
 
   const topics = recentTopics || [];
+  const recentTopicsSummary = buildRecentTopicsSummary(topics);
   void students;
 
-  const prompt = `
-You are an experienced Year ${normalizedYearLevel} teacher in New Zealand.
+  const baseInstructionBlock = buildBaseInstructionBlock();
+  const yearContextBlock = buildYearContextBlock(normalizedYearLevel, curriculumSection);
+  const dynamicRequestBlock = buildDynamicRequestBlock({
+    schoolDays,
+    datelistStr,
+    recentTopicsSummary,
+  });
 
-Generate a complete homework set for every school day listed below.
-
-Each homework set should take approximately 20–30 minutes to complete and align with the New Zealand Curriculum for Year ${normalizedYearLevel}.
-
-The curriculum provided represents the learning outcomes expected by the end of the academic year. The New Zealand school year consists of four terms of approximately 10 weeks each, separated by school holidays.
-
-Students should progressively build towards the end-of-year curriculum expectations. Do not assume students have already mastered content that is intended to be learned later in the year.
-
-Start with foundational concepts and gradually increase complexity as the school year progresses.
-
-The homework should feel like a structured learning journey rather than random disconnected activities.
-
-## Child Safety Rules (Strict)
-
-All generated content must be safe and age-appropriate for primary/intermediate school students.
-
-You must NOT include or reference:
-
-* Sexual content, romantic/relationship advice, or suggestive material
-* Violence, gore, weapons use, assault, abuse, or criminal instructions
-* Self-harm, suicide, or dangerous challenge/trend content
-* Drugs, alcohol, vaping, smoking, or gambling
-* Hate speech, discrimination, extremist content, or demeaning stereotypes
-* Frightening, disturbing, or traumatic scenarios not suitable for children
-* Any adult-only themes or mature life situations
-
-Use neutral, child-friendly language throughout.
-
-If a topic could become mature, replace it with a safe alternative suitable for school children.
-
-## Variety Requirements
-
-Vary the following across the week:
-
-* Maths topics
-* Reading topics
-* Reading genres
-* Writing tasks
-* Grammar focus areas
-
-Students should encounter a broad range of content and skills over time.
-
-## Reading Content Diversity
-
-Reading passages should expose students to a wide variety of knowledge and ideas.
-
-Rotate topics across areas such as:
-
-* Science
-* Space
-* Animals
-* Inventions
-* Technology
-* Ancient Civilisations
-* World History
-* Geography
-* Famous People
-* Environmental Issues
-* Sports
-* Health and Wellbeing
-* Cultural Traditions from Around the World
-* Exploration and Discovery
-* Engineering
-* Oceans
-* Weather and Climate
-* Art and Music
-* Everyday Life in Different Countries
-
-Do not make most reading passages about New Zealand, Kiwi culture, or local topics.
-
-New Zealand-based content should be used occasionally but should not dominate the reading programme.
-
-The goal is to improve reading comprehension while expanding students' general knowledge, vocabulary, and curiosity about the world.
-
-## Repetition Rules
-
-Avoid repeating:
-
-* Reading topics recently used
-* Similar reading passages
-* Writing prompts recently used
-* Grammar exercises recently used
-* Maths question contexts recently used
-
-recently used topics listed below
-${JSON.stringify(topics)}
-
-If a similar curriculum skill needs to be practised again, create a completely new scenario, story, context, or application.
-
-The homework should feel fresh and interesting each time a student receives it.
-
-## Student Engagement
-
-Use interesting, age-appropriate topics that encourage curiosity and learning.
-
-Balance educational value with engagement.
-
-The reading, writing, grammar, and maths activities should work together to create a varied and enjoyable learning experience while remaining aligned to the curriculum.
-
-
-${curriculumSection}
-
-School days to generate homework for:
-${datelistStr}
-
-Return ONLY a valid JSON array — no markdown, no code fences, no extra text. The array must have exactly ${schoolDays.length} objects, one per school day, in the same order listed above.
-
-Each object must follow this exact structure:
-{
-  "date": "Monday 1 April 2026",
-  "maths": {
-    "topic": "Topic name",
-    "instructions": "Brief instructions for students",
-    "questions": ["Q1","Q2","Q3","Q4","Q5","Q6","Q7","Q8"],
-    "word_problem": "A multi-step word problem"
-  },
-  "english": {
-    "reading_passage": {
-      "title": "Passage title",
-      "text": "passage suitable for Year ${normalizedYearLevel} NZ students, maximum 200 words",
-      "questions": ["Question 1","Question 2","Question 3","Question 4"]
-    },
-    "writing_task": {
-      "type": "Creative writing or Formal writing (alternate across the week)",
-      "prompt": "The writing prompt",
-      "word_count": "Year ${normalizedYearLevel} appropriate number of words .. maximum 100-150 words"
-    },
-    "grammar_focus": {
-      "topic": "Grammar topic",
-      "instruction": "What students need to do",
-      "exercise": "The grammar exercise (3-5 sentences or tasks)"
-    }
-  }
-}`;
+  const prompt = `${baseInstructionBlock}\n\n${yearContextBlock}\n\n${dynamicRequestBlock}`;
 
   const apiKey = process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
