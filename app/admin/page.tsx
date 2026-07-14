@@ -8,6 +8,7 @@ interface SignupRow {
   child_name: string;
   parent_name: string;
   email: string;
+  parent_email: string | null;
   year_level: string;
   days: string | null;
   resend: boolean;
@@ -381,6 +382,7 @@ export default function AdminPage() {
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("child_name")} className="font-semibold">Child{renderSortArrow("child_name")}</button></th>
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("parent_name")} className="font-semibold">Parent{renderSortArrow("parent_name")}</button></th>
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("email")} className="font-semibold">Email{renderSortArrow("email")}</button></th>
+                      <th className="px-3 py-2"><button type="button" onClick={() => handleSort("parent_email")} className="font-semibold">Parent email{renderSortArrow("parent_email")}</button></th>
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("year_level")} className="font-semibold">Year{renderSortArrow("year_level")}</button></th>
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("days")} className="font-semibold">Days{renderSortArrow("days")}</button></th>
                       <th className="px-3 py-2"><button type="button" onClick={() => handleSort("resend")} className="font-semibold">Resend{renderSortArrow("resend")}</button></th>
@@ -396,6 +398,7 @@ export default function AdminPage() {
                         <td className="px-3 py-2 font-medium text-slate-900">{signup.child_name}</td>
                         <td className="px-3 py-2 text-slate-700">{signup.parent_name}</td>
                         <td className="px-3 py-2 text-slate-700">{signup.email}</td>
+                        <td className="px-3 py-2 text-slate-700">{signup.parent_email || "—"}</td>
                         <td className="px-3 py-2 text-slate-700">{signup.year_level}</td>
                         <td className="px-3 py-2 text-slate-700">{signup.days || "—"}</td>
                         <td className="px-3 py-2 text-slate-700">{signup.resend ? "Yes" : "No"}</td>

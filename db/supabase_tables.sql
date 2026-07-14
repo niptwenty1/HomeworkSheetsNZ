@@ -5,6 +5,7 @@ create table if not exists signups (
   child_name text not null,
   year_level text not null,
   email text not null,
+  parent_email text,
   parent_name text not null,
   referrer_name text,
   days text,

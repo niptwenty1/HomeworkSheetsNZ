@@ -13,7 +13,7 @@ export async function GET() {
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
     .from("signups")
-    .select("id, child_name, parent_name, email, year_level, days, resend, resend_date, resend_reason, created_at")
+    .select("id, child_name, parent_name, email, parent_email, year_level, days, resend, resend_date, resend_reason, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {

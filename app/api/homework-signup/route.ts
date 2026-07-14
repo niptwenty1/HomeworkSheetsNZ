@@ -8,6 +8,7 @@ type SignupPayload = {
   childName?: unknown;
   yearLevel?: unknown;
   email?: unknown;
+  parentEmail?: unknown;
   parentName?: unknown;
   referrerName?: unknown;
 };
@@ -46,6 +47,7 @@ async function sendSignupTelegramAlert(params: {
   childName: string;
   yearLevel: string;
   email: string;
+  parentEmail: string;
   parentName: string;
   referrerName: string;
 }) {
@@ -63,7 +65,8 @@ async function sendSignupTelegramAlert(params: {
     `Child: ${params.childName}`,
     `Year: ${params.yearLevel}`,
     `Parent: ${params.parentName}`,
-    `Email: ${params.email}`,
+    `Child email: ${params.email}`,
+    `Parent email: ${params.parentEmail}`,
     params.referrerName ? `Referrer: ${params.referrerName}` : "",
     `Time (UTC): ${new Date().toISOString()}`,
   ].filter(Boolean);
@@ -95,10 +98,17 @@ export async function POST(request: Request) {
   const yearLevel =
     typeof payload.yearLevel === "string" ? payload.yearLevel.trim() : "";
   const email = typeof payload.email === "string" ? payload.email.trim() : "";
+  const parentEmail = typeof payload.parentEmail === "string" ? payload.parentEmail.trim() : "";
   const parentName = typeof payload.parentName === "string" ? payload.parentName.trim() : "";
   const referrerName = typeof payload.referrerName === "string" ? payload.referrerName.trim() : "";
 
-  if (!childName || !parentName ||  !validYearLevels.has(yearLevel) || !emailPattern.test(email)) {
+  if (
+    !childName ||
+    !parentName ||
+    !validYearLevels.has(yearLevel) ||
+    !emailPattern.test(email) ||
+    !emailPattern.test(parentEmail)
+  ) {
     return NextResponse.json(
       { ok: false, error: "Missing or invalid signup details" },
       { status: 400 },
@@ -133,6 +143,7 @@ export async function POST(request: Request) {
       child_name: childName,
       year_level: yearLevel,
       email,
+      parent_email: parentEmail,
       parent_name: parentName,
       referrer_name: referrerName,
       created_at: new Date(timestamp).toISOString(),
@@ -152,6 +163,7 @@ export async function POST(request: Request) {
         childName,
         yearLevel,
         email,
+        parentEmail,
         parentName,
         referrerName,
       });
@@ -161,7 +173,7 @@ export async function POST(request: Request) {
     }
 
     const mailerLiteResult = await syncSignupToMailerLite({
-      email,
+      email: parentEmail,
       childName,
       parentName,
     });

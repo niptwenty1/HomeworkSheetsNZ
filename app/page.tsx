@@ -36,11 +36,13 @@ function HomeworkSignupForm() {
   const childNameId = useId();
   const yearLevelId = useId();
   const emailId = useId();
+  const parentEmailId = useId();
   const referrerNameId = useId();
   const [parentName, setParentName] = useState("");
   const [childName, setChildName] = useState("");
   const [yearLevel, setYearLevel] = useState("");
   const [email, setEmail] = useState("");
+  const [parentEmail, setParentEmail] = useState("");
   const [referrerName, setReferrerName] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -52,6 +54,7 @@ function HomeworkSignupForm() {
     const cleanParentName = parentName.trim();
     const cleanName = childName.trim();
     const cleanEmail = email.trim();
+    const cleanParentEmail = parentEmail.trim();
     const cleanReferrerName = referrerName.trim();
 
     if (!cleanParentName) {
@@ -78,6 +81,12 @@ function HomeworkSignupForm() {
       return;
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanParentEmail)) {
+      setSubmitted(false);
+      setError("Enter a valid parent email address.");
+      return;
+    }
+
     // if (!cleanReferrerName) {
     //   setSubmitted(false);
     //   setError("Add the referrer's name.");
@@ -100,6 +109,7 @@ function HomeworkSignupForm() {
           childName: cleanName,
           yearLevel,
           email: cleanEmail,
+          parentEmail: cleanParentEmail,
           referrerName: cleanReferrerName,
         }),
       });
@@ -116,6 +126,7 @@ function HomeworkSignupForm() {
       setChildName("");
       setYearLevel("");
       setEmail("");
+      setParentEmail("");
       setReferrerName("");
       setSubmitted(true);
       setShowSuccessDialog(true);
@@ -248,6 +259,34 @@ function HomeworkSignupForm() {
               className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
               autoComplete="email"
               aria-describedby={`${emailId}-message`}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label
+          htmlFor={parentEmailId}
+          className="mb-2 block text-sm font-black text-[#6d6255]"
+        >
+          Parent&apos;s email
+        </label>
+        <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
+          <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
+            <Mail className="h-5 w-5 flex-none text-[#8d7c6b]" />
+            <input
+              id={parentEmailId}
+              type="email"
+              value={parentEmail}
+              onChange={(event) => {
+                setParentEmail(event.target.value);
+                if (error) {
+                  setError("");
+                }
+              }}
+              placeholder="Parent email address"
+              className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
+              autoComplete="email"
             />
           </div>
         </div>
