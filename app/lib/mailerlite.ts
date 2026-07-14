@@ -31,7 +31,7 @@ export async function syncSignupToMailerLite(
   const groupIds = parseGroupIds(
     process.env.MAILERLITE_GROUP_IDS || process.env.MAILERLITE_GROUP_ID,
   );
-  const displayName = `${input.parentName} (${input.childName})`;
+  const displayName = `${input.parentName}`;
 
   try {
     const mailerlite = new MailerLite({ api_key: apiKey });

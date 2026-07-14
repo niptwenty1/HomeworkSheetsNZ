@@ -48,7 +48,7 @@ export async function getSupabaseRecentHomeworkTopics(yearLevel: string, current
     .eq("year_level", yearLevel)
     .lt("generated_at", currentDate.toISOString())
     .order("generated_at", { ascending: false })
-    .limit(4);
+    .limit(24);
 
   if (error) {
     throw new Error(error.message);
