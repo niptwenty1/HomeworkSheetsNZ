@@ -1,7 +1,7 @@
 import MailerLite from "@mailerlite/mailerlite-nodejs";
 
 type MailerLiteSignupInput = {
-  email: string;
+  parentEmail: string;
   childName: string;
   parentName: string;
 };
@@ -36,7 +36,7 @@ export async function syncSignupToMailerLite(
   try {
     const mailerlite = new MailerLite({ api_key: apiKey });
     await mailerlite.subscribers.createOrUpdate({
-      email: input.email,
+      email: input.parentEmail,
       status: "active",
       groups: groupIds.length > 0 ? groupIds : undefined,
       fields: {

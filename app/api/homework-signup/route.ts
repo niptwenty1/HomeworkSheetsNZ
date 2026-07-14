@@ -173,7 +173,7 @@ export async function POST(request: Request) {
     }
 
     const mailerLiteResult = await syncSignupToMailerLite({
-      email: parentEmail,
+      parentEmail,
       childName,
       parentName,
     });
