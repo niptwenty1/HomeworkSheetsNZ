@@ -148,7 +148,7 @@ function HomeworkSignupForm() {
           htmlFor={parentNameId}
           className="mb-2 block text-sm font-black text-[#6d6255]"
         >
-          Parent&apos;s name
+          Parent&apos;s name <span className="text-[#d11a2a]">*</span>
         </label>
         <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
           <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
@@ -170,14 +170,40 @@ function HomeworkSignupForm() {
           </div>
         </div>
       </div>
-
+<div>
+        <label
+          htmlFor={parentEmailId}
+          className="mb-2 block text-sm font-black text-[#6d6255]"
+        >
+          Parent&apos;s email <span className="text-[#d11a2a]">*</span>
+        </label>
+        <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
+          <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
+            <Mail className="h-5 w-5 flex-none text-[#8d7c6b]" />
+            <input
+              id={parentEmailId}
+              type="email"
+              value={parentEmail}
+              onChange={(event) => {
+                setParentEmail(event.target.value);
+                if (error) {
+                  setError("");
+                }
+              }}
+              placeholder="Parent email address"
+              className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
+              autoComplete="email"
+            />
+          </div>
+        </div>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label
             htmlFor={childNameId}
             className="mb-2 block text-sm font-black text-[#6d6255]"
           >
-            Child&apos;s name
+            Child&apos;s name <span className="text-[#d11a2a]">*</span>
           </label>
           <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
             <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
@@ -205,7 +231,7 @@ function HomeworkSignupForm() {
             htmlFor={yearLevelId}
             className="mb-2 block text-sm font-black text-[#6d6255]"
           >
-            Child&apos;s year
+            Child&apos;s year <span className="text-[#d11a2a]">*</span>
           </label>
           <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
             <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
@@ -240,7 +266,7 @@ function HomeworkSignupForm() {
           htmlFor={emailId}
           className="mb-2 block text-sm font-black text-[#6d6255]"
         >
-          Where should we send it?
+          Where should we send it? <span className="text-[#d11a2a]">*</span>
         </label>
         <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
           <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
@@ -264,64 +290,35 @@ function HomeworkSignupForm() {
         </div>
       </div>
 
-      <div>
-        <label
-          htmlFor={parentEmailId}
-          className="mb-2 block text-sm font-black text-[#6d6255]"
-        >
-          Parent&apos;s email
-        </label>
-        <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
-          <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
-            <Mail className="h-5 w-5 flex-none text-[#8d7c6b]" />
-            <input
-              id={parentEmailId}
-              type="email"
-              value={parentEmail}
-              onChange={(event) => {
-                setParentEmail(event.target.value);
-                if (error) {
-                  setError("");
-                }
-              }}
-              placeholder="Parent email address"
-              className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
-              autoComplete="email"
-            />
-          </div>
-        </div>
-      </div>
+      
 
-      <div className="grid gap-3 sm:grid-cols-2">
-
-        <div>
-          <label
-            htmlFor={referrerNameId}
-            className="mb-2 block text-sm font-black text-[#6d6255]"
-          >
-            Referrer&apos;s name
-          </label>
-          <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
-            <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
-              <PencilLine className="h-5 w-5 flex-none text-[#8d7c6b]" />
-              <input
-                id={referrerNameId}
-                type="text"
-                value={referrerName}
-                onChange={(event) => {
-                  setReferrerName(event.target.value);
-                  if (error) {
-                    setError("");
-                  }
-                }}
-                placeholder="Name of the person who referred you"
-                className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
-                autoComplete="off"
-              />
+          <div>
+            <label
+              htmlFor={referrerNameId}
+              className="mb-2 block text-sm font-black text-[#6d6255]"
+            >
+              Referrer&apos;s name
+            </label>
+            <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
+              <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
+                <PencilLine className="h-5 w-5 flex-none text-[#8d7c6b]" />
+                <input
+                  id={referrerNameId}
+                  type="text"
+                  value={referrerName}
+                  onChange={(event) => {
+                    setReferrerName(event.target.value);
+                    if (error) {
+                      setError("");
+                    }
+                  }}
+                  placeholder="Name of the person who referred you"
+                  className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
+                  autoComplete="off"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
       <button
         type="submit"
@@ -360,9 +357,11 @@ function HomeworkSignupForm() {
               You&apos;re all set.
             </h3>
             <p className="mt-4 text-base font-medium leading-7 text-[#6d6255]">
-              Thanks for signing up. Once your child&apos;s worksheet setup is
-              complete, you&apos;ll start receiving homework emails at the
-              address you provided.
+              Thanks for signing up.
+            </p>
+             <p className="mt-4 text-base font-medium leading-7 text-[#6d6255]">
+              You&apos;ll receive a welcome email shortly. If you don&apos;t see it within a few minutes, please check your Spam, Junk, or Promotions folder 
+              and move it to your Primary inbox so you don&apos;t miss future homework emails.
             </p>
             <button
               type="button"
