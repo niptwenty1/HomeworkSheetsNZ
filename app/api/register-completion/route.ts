@@ -36,6 +36,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { email = "", name = "", year = "", date = "", sig = "" } = body;
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedName = String(name).trim();
+    const normalizedYear = String(year).trim();
+    const normalizedDate = String(date).trim();
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -55,21 +59,44 @@ export async function POST(request: Request) {
       );
     }
 
-    const isValid = verifySignature({ email, name, date, sig, secret });
+    const isValid = verifySignature({
+      email: normalizedEmail,
+      name: normalizedName,
+      date: normalizedDate,
+      sig,
+      secret,
+    });
     if (!isValid) {
-      console.error("Invalid completion signature for", email, name, date);
+      console.error("Invalid completion signature for", normalizedEmail, normalizedName, normalizedDate);
       return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 401 });
     }
 
+    const supabase = getSupabaseServerClient();
+    const { data: existing, error: existingError } = await supabase
+      .from("completions")
+      .select("id")
+      .eq("email", normalizedEmail)
+      .eq("name", normalizedName)
+      .eq("date", normalizedDate)
+      .limit(1);
+
+    if (existingError) {
+      console.error("Supabase select error:", existingError);
+      return NextResponse.json({ ok: false, error: existingError.message }, { status: 502 });
+    }
+
+    if ((existing || []).length > 0) {
+      return NextResponse.json({ ok: true, alreadyRecorded: true });
+    }
+
     const completionPayload = {
-      email,
-      name,
-      year,
-      date,
+      email: normalizedEmail,
+      name: normalizedName,
+      year: normalizedYear,
+      date: normalizedDate,
       created_at: new Date().toISOString(),
     };
 
-    const supabase = getSupabaseServerClient();
     const { error } = await supabase.from("completions").insert([completionPayload]);
 
     if (error) {
