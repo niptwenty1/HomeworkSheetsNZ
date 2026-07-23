@@ -188,6 +188,9 @@ async function logUsage(params: {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  billedInputEstimate?: number;
   model?: string;
   maxTokens?: number;
 }) {
@@ -204,6 +207,9 @@ async function logUsage(params: {
       input_tokens: params.inputTokens || 0,
       output_tokens: params.outputTokens || 0,
       total_tokens: params.totalTokens || 0,
+      cache_read_input_tokens: params.cacheReadInputTokens || 0,
+      cache_creation_input_tokens: params.cacheCreationInputTokens || 0,
+      billed_input_estimate: params.billedInputEstimate || 0,
       model: params.model || null,
       max_tokens: params.maxTokens || null,
     },
@@ -310,6 +316,9 @@ async function processYearLevel(params: {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      billedInputEstimate: usage.billedInputEstimate,
       model: usage.model,
       maxTokens: usage.maxTokens,
     });

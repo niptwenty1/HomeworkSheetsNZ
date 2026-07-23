@@ -86,6 +86,9 @@ create table if not exists claude_usage_logs (
   input_tokens integer default 0,
   output_tokens integer default 0,
   total_tokens integer default 0,
+  cache_read_input_tokens integer default 0,
+  cache_creation_input_tokens integer default 0,
+  billed_input_estimate integer default 0,
   model text,
   max_tokens integer,
   created_at timestamptz default now()

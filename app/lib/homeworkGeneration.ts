@@ -34,6 +34,9 @@ export type ClaudeGenerationUsage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  billedInputEstimate: number;
   model: string;
   maxTokens: number;
 };
@@ -105,6 +108,10 @@ function getMaxTokens() {
   return parsed;
 }
 
+function getPromptCachingBetaHeader() {
+  return process.env.CLAUDE_PROMPT_CACHING_BETA || "prompt-caching-2024-07-31";
+}
+
 function dedupeAndLimit(values: string[], limit = 8) {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -145,7 +152,10 @@ function buildRecentTopicsSummary(
 }
 
 function buildBaseInstructionBlock() {
-  return `BASE RULES
+  return `PROMPT VERSION
+HW_PROMPT_V1
+
+BASE RULES
 You generate weekly homework for New Zealand primary/intermediate students.
 Output must be valid JSON only (no markdown, no code fences, no extra text).
 
@@ -258,8 +268,6 @@ export async function generateWeeklyHomeworkWithUsage({
     recentTopicsSummary,
   });
 
-  const prompt = `${baseInstructionBlock}\n\n${yearContextBlock}\n\n${dynamicRequestBlock}`;
-
   const apiKey = process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("Missing Claude API key.");
@@ -267,6 +275,7 @@ export async function generateWeeklyHomeworkWithUsage({
 
   const maxTokens = getMaxTokens();
   const model = process.env.CLAUDE_MODEL || "claude-3-5-sonnet-latest";
+  const promptCachingBeta = getPromptCachingBetaHeader();
 
   console.info("[homeworkGeneration] Claude request start", {
     yearLevel: normalizedYearLevel,
@@ -282,12 +291,33 @@ export async function generateWeeklyHomeworkWithUsage({
     headers: {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-beta": promptCachingBeta,
       "content-type": "application/json",
     },
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: baseInstructionBlock,
+              cache_control: { type: "ephemeral" },
+            },
+            {
+              type: "text",
+              text: yearContextBlock,
+              cache_control: { type: "ephemeral" },
+            },
+            {
+              type: "text",
+              text: dynamicRequestBlock,
+            },
+          ],
+        },
+      ],
     }),
   });
 
@@ -316,6 +346,8 @@ export async function generateWeeklyHomeworkWithUsage({
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
+      cache_read_input_tokens?: number;
+      cache_creation_input_tokens?: number;
     };
   };
 
@@ -330,6 +362,9 @@ export async function generateWeeklyHomeworkWithUsage({
   const text = data.content?.[0]?.text?.trim() || "";
   const inputTokens = Number(data.usage?.input_tokens || 0);
   const outputTokens = Number(data.usage?.output_tokens || 0);
+  const cacheReadInputTokens = Number(data.usage?.cache_read_input_tokens || 0);
+  const cacheCreationInputTokens = Number(data.usage?.cache_creation_input_tokens || 0);
+  const billedInputEstimate = Math.max(0, inputTokens - cacheReadInputTokens);
 
   console.info("[homeworkGeneration] Claude response metadata", {
     yearLevel: normalizedYearLevel,
@@ -338,6 +373,9 @@ export async function generateWeeklyHomeworkWithUsage({
     inputTokens,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
+    cacheReadInputTokens,
+    cacheCreationInputTokens,
+    billedInputEstimate,
     textLength: text.length,
   });
 
@@ -389,6 +427,9 @@ export async function generateWeeklyHomeworkWithUsage({
       inputTokens,
       outputTokens,
       totalTokens: inputTokens + outputTokens,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+      billedInputEstimate,
       payloadSnippet: context.snippet,
       payloadTailPreview: clip(payload.slice(Math.max(0, payload.length - 600)), 900),
       fullResponsePreview: clip(cleaned, 800),
@@ -410,6 +451,9 @@ export async function generateWeeklyHomeworkWithUsage({
     inputTokens,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
+    cacheReadInputTokens,
+    cacheCreationInputTokens,
+    billedInputEstimate,
   });
 
   return {
@@ -418,6 +462,9 @@ export async function generateWeeklyHomeworkWithUsage({
       inputTokens,
       outputTokens,
       totalTokens: inputTokens + outputTokens,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+      billedInputEstimate,
       model,
       maxTokens,
     },
