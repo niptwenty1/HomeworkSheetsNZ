@@ -151,7 +151,24 @@ function buildRecentTopicsSummary(
   return lines.length ? lines.join("\n") : "No recent topics provided.";
 }
 
-function buildBaseInstructionBlock() {
+function buildWritingWordCountGuidance(yearLevel: string) {
+  const parsedYear = Number.parseInt(String(yearLevel).replace(/[^0-9]/g, ""), 10);
+  if (Number.isNaN(parsedYear) || parsedYear <= 0) {
+    return "Use a year-appropriate range. Keep younger students on very short responses and older students on longer responses.";
+  }
+
+  if (parsedYear <= 1) return "5-10 words";
+  if (parsedYear === 2) return "10-20 words";
+  if (parsedYear === 3) return "20-35 words";
+  if (parsedYear === 4) return "30-50 words";
+  if (parsedYear === 5) return "50-70 words";
+  if (parsedYear === 6) return "70-90 words";
+  if (parsedYear === 7) return "80-110 words";
+  if (parsedYear === 8) return "90-130 words";
+  return "100-150 words";
+}
+
+function buildBaseInstructionBlock(writingWordCountRange: string) {
   return `PROMPT VERSION
 HW_PROMPT_V1
 
@@ -195,7 +212,7 @@ Each object must match this structure exactly:
     "writing_task": {
       "type": "Creative writing or Formal writing (alternate across the week)",
       "prompt": "The writing prompt",
-      "word_count": "Year-appropriate number of words .. maximum 100-150 words"
+      "word_count": "${writingWordCountRange}"
     },
     "grammar_focus": {
       "topic": "Grammar topic",
@@ -247,6 +264,7 @@ export async function generateWeeklyHomeworkWithUsage({
   students?: Array<{ name?: string; email?: string; level?: string; difficultyLevel?: string; days?: string }>;
 }): Promise<WeeklyHomeworkGenerationResult> {
   const normalizedYearLevel = String(yearLevel || 6);
+  const writingWordCountRange = buildWritingWordCountGuidance(normalizedYearLevel);
   const requestStartedAt = Date.now();
   const datelistStr = schoolDays
     .map((day, index) => `${index + 1}. ${day.date}`)
@@ -260,7 +278,7 @@ export async function generateWeeklyHomeworkWithUsage({
   const recentTopicsSummary = buildRecentTopicsSummary(topics);
   void students;
 
-  const baseInstructionBlock = buildBaseInstructionBlock();
+  const baseInstructionBlock = buildBaseInstructionBlock(writingWordCountRange);
   const yearContextBlock = buildYearContextBlock(normalizedYearLevel, curriculumSection);
   const dynamicRequestBlock = buildDynamicRequestBlock({
     schoolDays,
