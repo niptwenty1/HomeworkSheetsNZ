@@ -112,7 +112,7 @@ function getPromptCachingBetaHeader() {
   return process.env.CLAUDE_PROMPT_CACHING_BETA || "prompt-caching-2024-07-31";
 }
 
-function dedupeAndLimit(values: string[], limit = 8) {
+function dedupeAndLimit(values: string[], limit = 20) {
   const seen = new Set<string>();
   const result: string[] = [];
 
@@ -130,25 +130,22 @@ function dedupeAndLimit(values: string[], limit = 8) {
 }
 
 function buildRecentTopicsSummary(
-  topics: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingTopic?: string; grammarTopic?: string }>,
+  topics: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingPrompt?: string; grammarTopic?: string }>,
 ) {
-  if (!topics.length) {
-    return "No recent topics provided.";
-  }
-
   const maths = dedupeAndLimit(topics.map((item) => String(item.mathsTopic || "")));
   const reading = dedupeAndLimit(topics.map((item) => String(item.readingTopic || "")));
-  const writing = dedupeAndLimit(topics.map((item) => String(item.writingTopic || "")));
+  const writing = dedupeAndLimit(topics.map((item) => String(item.writingPrompt || "")));
   const grammar = dedupeAndLimit(topics.map((item) => String(item.grammarTopic || "")));
 
-  const lines = [
-    maths.length ? `- Maths: ${maths.join("; ")}` : "",
-    reading.length ? `- Reading: ${reading.join("; ")}` : "",
-    writing.length ? `- Writing: ${writing.join("; ")}` : "",
-    grammar.length ? `- Grammar: ${grammar.join("; ")}` : "",
-  ].filter(Boolean);
+  const formatSection = (label: string, values: string[]) =>
+    `${label}\n${values.length ? values.map((value) => `- ${value}`).join("\n") : "- None recorded"}`;
 
-  return lines.length ? lines.join("\n") : "No recent topics provided.";
+  return [
+    formatSection("MATHS TOPICS NOT TO REPEAT", maths),
+    formatSection("READING TOPICS NOT TO REPEAT", reading),
+    formatSection("WRITING PROMPTS NOT TO REPEAT", writing),
+    formatSection("GRAMMAR TOPICS NOT TO REPEAT", grammar),
+  ].join("\n\n");
 }
 
 function buildWritingWordCountGuidance(yearLevel: string) {
@@ -260,7 +257,7 @@ export async function generateWeeklyHomeworkWithUsage({
   yearLevel: string | number;
   schoolDays: SchoolDay[];
   curriculumContent?: string;
-  recentTopics?: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingTopic?: string; grammarTopic?: string }>;
+  recentTopics?: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingPrompt?: string; grammarTopic?: string }>;
   students?: Array<{ name?: string; email?: string; level?: string; difficultyLevel?: string; days?: string }>;
 }): Promise<WeeklyHomeworkGenerationResult> {
   const normalizedYearLevel = String(yearLevel || 6);
@@ -493,7 +490,7 @@ export async function generateWeeklyHomework(args: {
   yearLevel: string | number;
   schoolDays: SchoolDay[];
   curriculumContent?: string;
-  recentTopics?: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingTopic?: string; grammarTopic?: string }>;
+  recentTopics?: Array<{ date?: string; mathsTopic?: string; readingTopic?: string; writingPrompt?: string; grammarTopic?: string }>;
   students?: Array<{ name?: string; email?: string; level?: string; difficultyLevel?: string; days?: string }>;
 }) {
   const result = await generateWeeklyHomeworkWithUsage(args);
