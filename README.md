@@ -183,6 +183,31 @@ Note: The `send-homework` route already checks the day-of-week (Mon/Wed/Fri) and
 
 ## Testing & safety
 
+- Run the complete automated test suite from the project root:
+  ```bash
+  npm test
+  ```
+- Run only the mocked send-homework tests:
+  ```bash
+  npx vitest run app/api/cron/send-homework/route.test.ts
+  ```
+- Run tests in watch mode while developing:
+  ```bash
+  npm run test:watch
+  ```
+- The current send-homework tests mock Supabase data access and the email provider, so they do not require Supabase credentials or send real emails.
+- Run the opt-in Supabase topic/prompt integration test from PowerShell:
+  ```powershell
+  $env:RUN_SUPABASE_INTEGRATION_TESTS="true"
+  $env:TEST_YEAR_LEVEL="5"
+  $env:TEST_REFERENCE_DATE="2026-08-24"
+  npm run test:integration
+  ```
+- The integration test reads recent topics from the configured Supabase project and writes `test-reports/supabase-prompt-report.json` containing the retrieved topics, included and omitted topic values, and the generated prompt. The Claude response is mocked, so it does not send a request to Anthropic. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment first.
+- Clear the opt-in flag after running it:
+  ```powershell
+  Remove-Item Env:RUN_SUPABASE_INTEGRATION_TESTS
+  ```
 - Use a staging mail provider and a test Supabase project for trial runs.
 - Before enabling production: test end-to-end with one student and a test inbox.
 - For Gmail SMTP, create an app password in your Google account and keep it in `GMAIL_APP_PASSWORD` rather than using your normal Google password.

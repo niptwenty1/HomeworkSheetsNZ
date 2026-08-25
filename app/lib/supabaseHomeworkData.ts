@@ -44,7 +44,7 @@ export async function getSupabaseRecentHomeworkTopics(yearLevel: string, current
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
     .from("homework_entries")
-    .select("date, maths_topic, reading_title, writing_type, grammar_topic, generated_at")
+    .select("date, maths_topic, reading_title, writing_prompt, grammar_topic, generated_at")
     .eq("year_level", yearLevel)
     .lt("generated_at", currentDate.toISOString())
     .order("generated_at", { ascending: false })
@@ -58,7 +58,7 @@ export async function getSupabaseRecentHomeworkTopics(yearLevel: string, current
     date: row.date,
     mathsTopic: row.maths_topic,
     readingTopic: row.reading_title,
-    writingTopic: row.writing_type,
+    writingPrompt: row.writing_prompt,
     grammarTopic: row.grammar_topic,
   }));
 }
