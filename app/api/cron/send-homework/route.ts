@@ -167,7 +167,7 @@ async function handleRequest(request: Request) {
 
   for (const student of students) {
     const studentDays = parseStudentDays(student.days);
-    if (studentDays.length > 0 && !studentDays.includes(dayName)) {
+    if (studentDays.length === 0 || !studentDays.includes(dayName)) {
       continue;
     }
 
