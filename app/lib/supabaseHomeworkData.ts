@@ -1,8 +1,16 @@
 import getSupabaseServerClient from "./supabaseServer";
 
-export async function getSupabaseStudents() {
+export async function getSupabaseStudents(options?: { verifiedOnly?: boolean }) {
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase.from("signups").select("child_name, email, year_level, days");
+  let query = supabase
+    .from("signups")
+    .select("child_name, email, year_level, days, parent_email_verified_at");
+
+  if (options?.verifiedOnly) {
+    query = query.not("parent_email_verified_at", "is", null);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);

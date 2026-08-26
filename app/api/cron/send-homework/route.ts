@@ -117,7 +117,7 @@ async function handleRequest(request: Request) {
   }
 
   const [students, homeworkRows] = await Promise.all([
-    getSupabaseStudents(),
+    getSupabaseStudents({ verifiedOnly: true }),
     getSupabaseHomeworkForDate(targetDate),
   ]);
 
