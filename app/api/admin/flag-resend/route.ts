@@ -12,16 +12,17 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
+    const id = Number(body?.id);
     const email = String(body?.email || "").trim();
 
-    if (!email) {
-      return NextResponse.json({ ok: false, error: "Email is required" }, { status: 400 });
+    if (!Number.isInteger(id) || id <= 0) {
+      return NextResponse.json({ ok: false, error: "Student id is required" }, { status: 400 });
     }
 
     const date = body?.date ? String(body.date) : null;
     const reason = body?.reason ? String(body.reason) : "Flagged from admin dashboard";
 
-    await flagStudentForResend({ email, date, reason });
+    await flagStudentForResend({ id, email, date, reason });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -233,6 +233,7 @@ export default function AdminPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: signup.id,
           email: signup.email,
           date: selectedDate,
           reason: `Flagged from admin dashboard for ${selectedDate}`,

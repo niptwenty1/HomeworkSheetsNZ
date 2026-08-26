@@ -90,15 +90,28 @@ export async function getStudentByEmail(email: string) {
 }
 
 export async function flagStudentForResend({
+  id,
   email,
   date,
   reason,
 }: {
+  id?: number;
   email: string | string[];
   date?: string | null;
   reason?: string | null;
 }) {
   const supabase = getSupabaseServerClient();
+
+  if (id !== undefined) {
+    const { error } = await supabase
+      .from("signups")
+      .update({ resend: true, resend_date: date || null, resend_reason: reason || null, resend_requested_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) throw new Error(error.message);
+    return;
+  }
+
   const normalizedEmails = (Array.isArray(email) ? email : [email])
     .map((value) => String(value || "").trim())
     .filter(Boolean);
