@@ -16,8 +16,8 @@ export function hashEmailVerificationToken(token: string) {
 }
 
 export function getEmailVerificationUrl(token: string) {
-  const baseUrl = process.env.NEXTAUTH_URL ||
-    (process.env.BASE_URL ? `https://${process.env.BASE_URL}` : "http://localhost:3000");
+  const baseUrl = 
+    process.env.BASE_URL ? `https://${process.env.BASE_URL}` : "http://localhost:3000";
   return `${baseUrl.replace(/\/$/, "")}/api/verify-parent-email?token=${encodeURIComponent(token)}`;
 }
 
