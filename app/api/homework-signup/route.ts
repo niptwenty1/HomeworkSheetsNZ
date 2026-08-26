@@ -1,8 +1,9 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import getSupabaseServerClient from "../../lib/supabaseServer";
-import { syncSignupToMailerLite } from "../../lib/mailerlite";
 import { sendTelegramMessage } from "../../lib/telegram";
+import { buildEmailVerificationMessage, createEmailVerificationToken, getEmailVerificationUrl } from "../../lib/emailVerification";
+import { sendHomeworkEmail } from "../../lib/email";
 
 type SignupPayload = {
   childName?: unknown;
@@ -10,6 +11,7 @@ type SignupPayload = {
   email?: unknown;
   parentEmail?: unknown;
   parentName?: unknown;
+  school?: unknown;
   referrerName?: unknown;
 };
 
@@ -99,12 +101,15 @@ export async function POST(request: Request) {
     typeof payload.yearLevel === "string" ? payload.yearLevel.trim() : "";
   const email = typeof payload.email === "string" ? payload.email.trim() : "";
   const parentEmail = typeof payload.parentEmail === "string" ? payload.parentEmail.trim() : "";
+  const normalizedParentEmail = parentEmail.toLowerCase();
   const parentName = typeof payload.parentName === "string" ? payload.parentName.trim() : "";
+  const school = typeof payload.school === "string" ? payload.school.trim() : "";
   const referrerName = typeof payload.referrerName === "string" ? payload.referrerName.trim() : "";
 
   if (
     !childName ||
     !parentName ||
+    !school ||
     !validYearLevels.has(yearLevel) ||
     !emailPattern.test(email) ||
     !emailPattern.test(parentEmail)
@@ -138,24 +143,63 @@ export async function POST(request: Request) {
 
   try {
     const timestamp = Date.now();
+    const supabase = getSupabaseServerClient();
+    const { data: verifiedParent } = await supabase
+      .from("signups")
+      .select("id")
+      .ilike("parent_email", normalizedParentEmail)
+      .not("parent_email_verified_at", "is", null)
+      .limit(1)
+      .maybeSingle();
+    const isParentEmailVerified = Boolean(verifiedParent);
+    const { data: pendingParent } = isParentEmailVerified
+      ? { data: null }
+      : await supabase
+          .from("signups")
+          .select("parent_email_verification_token_hash, parent_email_verification_expires_at")
+          .ilike("parent_email", normalizedParentEmail)
+          .is("parent_email_verified_at", null)
+          .not("parent_email_verification_token_hash", "is", null)
+          .gt("parent_email_verification_expires_at", new Date(timestamp).toISOString())
+          .limit(1)
+          .maybeSingle();
+    const verification = isParentEmailVerified || pendingParent ? null : createEmailVerificationToken();
 
     const signupPayload = {
       child_name: childName,
       year_level: yearLevel,
       email,
-      parent_email: parentEmail,
+      parent_email: normalizedParentEmail,
+      school,
       parent_name: parentName,
+      parent_email_verified_at: isParentEmailVerified ? new Date(timestamp).toISOString() : null,
+      parent_email_verification_token_hash: verification?.tokenHash || null,
+      parent_email_verification_expires_at: verification?.expiresAt || null,
       referrer_name: referrerName,
       created_at: new Date(timestamp).toISOString(),
     };
 
 
-    const supabase = getSupabaseServerClient();
     const { error } = await supabase.from("signups").insert([signupPayload]);
 
     if (error) {
       console.error("Supabase insert error:", error);
       throw new Error(`Supabase insert failed: ${error.message}`);
+    }
+
+    if (verification) {
+      const verificationUrl = getEmailVerificationUrl(verification.token);
+      const verificationEmail = await sendHomeworkEmail({
+        to: normalizedParentEmail,
+        subject: "Verify your HomeWorksheets email address",
+        html: buildEmailVerificationMessage({ parentName, verificationUrl }),
+        from: process.env.FROM_EMAIL,
+        replyTo: process.env.REPLY_TO_EMAIL || process.env.FROM_EMAIL,
+      });
+
+      if (!verificationEmail.ok) {
+        throw new Error("Unable to send email verification message");
+      }
     }
 
     try {
@@ -172,20 +216,10 @@ export async function POST(request: Request) {
       console.error("Telegram signup alert failed:", message);
     }
 
-    const mailerLiteResult = await syncSignupToMailerLite({
-      parentEmail,
-      childName,
-      parentName,
-    });
-
-    if (!mailerLiteResult.ok) {
-      console.error("MailerLite sync failed:", mailerLiteResult.reason);
-    }
-
     return NextResponse.json({
       ok: true,
-      mailerLiteSynced: mailerLiteResult.ok,
-      mailerLiteSkipped: Boolean(mailerLiteResult.skipped),
+      verificationRequired: !isParentEmailVerified,
+      verificationEmailSent: Boolean(verification),
     });
   } catch {
 

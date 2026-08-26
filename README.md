@@ -28,6 +28,7 @@ This README summarizes what changed, how the pieces fit together, the database s
 - `app/api/cron/send-homework/route.ts` — cron route that finds today's homework and sends emails to students.
 - `app/api/homework/resend/route.ts` — API to enqueue a resend request for a specific student/date.
 - `app/api/cron/process-resends/route.ts` — cron route that processes pending resends.
+- `app/api/verify-parent-email/route.ts` — verifies parent email tokens and activates the signup.
 - `db/supabase_tables.sql` — SQL schema additions: `homework_entries`, `sent_emails`, `curriculum_items` (and updated `signups`, `completions`). Note: `resend_requests` has been removed and resends are now flagged on `signups`.
 
 ---
@@ -182,6 +183,10 @@ Note: The `send-homework` route already checks the day-of-week (Mon/Wed/Fri) and
 ---
 
 ## Testing & safety
+
+- Apply `db/migrations/2026-08-26-add-school-and-parent-email-verification.sql` to add the school and parent email verification columns.
+- Parent verification links are single-use and valid for 7 days. Homework sending filters signups to rows with a non-null `parent_email_verified_at`.
+- Verification is currently shared across signups using the same normalized parent email: a verified parent email skips verification for later students, and one valid pending link verifies all pending signups for that parent email.
 
 - Run the complete automated test suite from the project root:
   ```bash

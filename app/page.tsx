@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useId, useState } from "react";
+import { FormEvent, useEffect, useId, useState } from "react";
 import {
   ArrowRight,
   BookOpenText,
@@ -13,6 +13,7 @@ import {
   Mail,
   Minus,
   PencilLine,
+  School,
   Sparkles,
   UserRound,
 } from "lucide-react";
@@ -37,17 +38,30 @@ function HomeworkSignupForm() {
   const yearLevelId = useId();
   const emailId = useId();
   const parentEmailId = useId();
+  const schoolId = useId();
   const referrerNameId = useId();
   const [parentName, setParentName] = useState("");
   const [childName, setChildName] = useState("");
   const [yearLevel, setYearLevel] = useState("");
   const [email, setEmail] = useState("");
   const [parentEmail, setParentEmail] = useState("");
+  const [school, setSchool] = useState("");
   const [referrerName, setReferrerName] = useState("");
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("emailVerified") !== "1") {
+      return;
+    }
+
+    setEmailVerified(true);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,6 +69,7 @@ function HomeworkSignupForm() {
     const cleanName = childName.trim();
     const cleanEmail = email.trim();
     const cleanParentEmail = parentEmail.trim();
+    const cleanSchool = school.trim();
     const cleanReferrerName = referrerName.trim();
 
     if (!cleanParentName) {
@@ -87,6 +102,12 @@ function HomeworkSignupForm() {
       return;
     }
 
+    if (!cleanSchool) {
+      setSubmitted(false);
+      setError("Enter your child's school.");
+      return;
+    }
+
     // if (!cleanReferrerName) {
     //   setSubmitted(false);
     //   setError("Add the referrer's name.");
@@ -110,6 +131,7 @@ function HomeworkSignupForm() {
           yearLevel,
           email: cleanEmail,
           parentEmail: cleanParentEmail,
+          school: cleanSchool,
           referrerName: cleanReferrerName,
         }),
       });
@@ -127,6 +149,7 @@ function HomeworkSignupForm() {
       setYearLevel("");
       setEmail("");
       setParentEmail("");
+      setSchool("");
       setReferrerName("");
       setSubmitted(true);
       setShowSuccessDialog(true);
@@ -142,7 +165,8 @@ function HomeworkSignupForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 text-left" noValidate>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-3 text-left" noValidate>
       <div>
         <label
           htmlFor={parentNameId}
@@ -193,6 +217,33 @@ function HomeworkSignupForm() {
               placeholder="Parent email address"
               className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
               autoComplete="email"
+            />
+          </div>
+        </div>
+      </div>
+      <div>
+        <label
+          htmlFor={schoolId}
+          className="mb-2 block text-sm font-black text-[#6d6255]"
+        >
+          Child&apos;s school <span className="text-[#d11a2a]">*</span>
+        </label>
+        <div className="soft-inset rounded-[1.35rem] bg-[#fffaf0]/82 p-2">
+          <div className="flex min-h-14 items-center gap-2 rounded-[1rem] bg-white/72 px-4">
+            <School className="h-5 w-5 flex-none text-[#8d7c6b]" />
+            <input
+              id={schoolId}
+              type="text"
+              value={school}
+              onChange={(event) => {
+                setSchool(event.target.value);
+                if (error) {
+                  setError("");
+                }
+              }}
+              placeholder="Child's school"
+              className="min-w-0 flex-1 bg-transparent py-4 text-base font-medium text-[#2a2722] outline-none placeholder:text-[#9c8e7d]"
+              autoComplete="organization"
             />
           </div>
         </div>
@@ -337,7 +388,7 @@ function HomeworkSignupForm() {
         aria-live="polite"
       >
         {error ||
-          (submitted ? "Signup received. We will be in touch soon." : "Takes less than a minute. No payment needed.")}
+          (submitted ? "Signup received. Check your inbox to verify your parent email address." : "Takes less than a minute. No payment needed.")}
       </p>
       {showSuccessDialog ? (
         <div
@@ -360,8 +411,7 @@ function HomeworkSignupForm() {
               Thanks for signing up.
             </p>
              <p className="mt-4 text-base font-medium leading-7 text-[#6d6255]">
-              You&apos;ll receive a welcome email shortly. If you don&apos;t see it within a few minutes, please check your Spam, Junk, or Promotions folder 
-              and move it to your Primary inbox so you don&apos;t miss future homework emails.
+              Please check your inbox for a verification email and click the link to verify your parent email address. The link is valid for 7 days. If you don&apos;t see it within a few minutes, check your Spam, Junk, or Promotions folder.
             </p>
             <button
               type="button"
@@ -373,7 +423,38 @@ function HomeworkSignupForm() {
           </div>
         </div>
       ) : null}
-    </form>
+      </form>
+      {emailVerified ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#2a2722]/35 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="email-verified-title"
+        >
+          <div className="tactile-panel w-full max-w-md rounded-[2rem] p-6 text-center shadow-tactile sm:p-8">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-[#a9d8d0] shadow-mint">
+              <Check className="h-7 w-7 text-[#2a2722]" />
+            </div>
+            <h3
+              id="email-verified-title"
+              className="text-3xl font-black leading-tight tracking-tight text-[#2a2722]"
+            >
+              Email verified.
+            </h3>
+            <p className="mt-4 text-base font-medium leading-7 text-[#6d6255]">
+              Thank you for verifying your email. We look forward to sending you your homework.
+            </p>
+            <button
+              type="button"
+              onClick={() => setEmailVerified(false)}
+              className="tactile-button mt-6 inline-flex min-h-14 w-full items-center justify-center rounded-[1.35rem] bg-[#eea38c] px-5 pb-4 pt-3 text-base font-black text-[#2a2722] transition focus:outline-none focus-visible:ring-4 focus-visible:ring-[#a9d8d0]/70"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
