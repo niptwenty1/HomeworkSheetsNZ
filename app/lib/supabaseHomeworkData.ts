@@ -97,6 +97,22 @@ export async function getStudentByEmail(email: string) {
   return data || null;
 }
 
+export async function getStudentById(id: number) {
+  const supabase = getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("signups")
+    .select("child_name, email, year_level, days")
+    .eq("id", id)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data || null;
+}
+
 export async function flagStudentForResend({
   id,
   email,

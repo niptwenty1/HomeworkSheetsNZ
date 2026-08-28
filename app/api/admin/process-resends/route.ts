@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions, isAdminEmail } from "../../../lib/adminAuth";
-import { getStudentsMarkedForResend, getStudentByEmail, getSupabaseHomeworkForDate, clearResendFlagById, logSentEmail } from "../../../lib/supabaseHomeworkData";
+import { getStudentsMarkedForResend, getStudentById, getSupabaseHomeworkForDate, clearResendFlagById, logSentEmail } from "../../../lib/supabaseHomeworkData";
 import { buildHomeworkEmailPayload } from "../../../lib/homeworkEmail";
 import sendHomeworkEmail from "../../../lib/email";
 
@@ -17,7 +17,7 @@ export async function POST() {
 
   for (const req of pending) {
     try {
-      const student = await getStudentByEmail(String(req.email || ""));
+      const student = await getStudentById(Number(req.id));
       if (!student) {
         await clearResendFlagById(Number(req.id));
         results.push({ id: Number(req.id), email: String(req.email || ""), status: "student-not-found" });
