@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/generate-weekly",
-      "schedule": "0 22 * * 0"
+      "schedule": "0 22 * * 6"
     },
     {
       "path": "/api/cron/send-homework",
