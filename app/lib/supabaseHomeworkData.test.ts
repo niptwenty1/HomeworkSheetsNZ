@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { flagStudentForResend } from "./supabaseHomeworkData";
+import { flagStudentForResend, getStudentById } from "./supabaseHomeworkData";
 import getSupabaseServerClient from "./supabaseServer";
 
 vi.mock("./supabaseServer", () => ({
@@ -34,6 +34,27 @@ describe("flagStudentForResend", () => {
         resend_reason: "Selected student",
       }),
     );
+    expect(eq).toHaveBeenCalledWith("id", 42);
+  });
+});
+
+describe("getStudentById", () => {
+  it("looks up the selected signup by id rather than email", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { child_name: "Selected Student", email: "shared@example.com", year_level: "5", days: "Monday" },
+      error: null,
+    });
+    const limit = vi.fn().mockReturnValue({ maybeSingle });
+    const eq = vi.fn().mockReturnValue({ limit });
+    const select = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ select });
+    mockedGetSupabaseServerClient.mockReturnValue({ from } as never);
+
+    const student = await getStudentById(42);
+
+    expect(student?.child_name).toBe("Selected Student");
+    expect(from).toHaveBeenCalledWith("signups");
+    expect(select).toHaveBeenCalledWith("child_name, email, year_level, days");
     expect(eq).toHaveBeenCalledWith("id", 42);
   });
 });
