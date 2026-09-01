@@ -11,7 +11,7 @@ This README summarizes what changed, how the pieces fit together, the database s
 - Frontend: remains the Next.js app (signup page, public pages).
 - Backend / generation: server-side Claude call now lives in `app/lib/homeworkGeneration.ts` and is triggered by `POST /api/homework/generate-weekly`.
 - Persistence: Supabase now stores students, curriculum, generated homework and send logs.
-- Sending: emails are sent through a provider-agnostic mail layer in `app/lib/email.ts`. Gmail SMTP is the default provider, with Resend available as a switchable alternative via configuration.
+- Sending: emails are sent through a provider-agnostic mail layer in `app/lib/email.ts`. Brevo SMTP is the default provider, with Gmail SMTP available as a manual fallback.
 - Cron: Vercel scheduled routes call the server routes to generate and send homework.
  - Resend/Retry: resends are now flagged on the `signups` row (`resend` boolean and optional `resend_date`, `resend_reason`). The resend API marks a student for resend and the processor cron reads `signups` where `resend = true`.
 
@@ -22,7 +22,7 @@ This README summarizes what changed, how the pieces fit together, the database s
 - `app/lib/homeworkGeneration.ts` — builds the Claude prompt and calls the Claude API, unchanged prompt logic.
 - `app/lib/supabaseHomeworkData.ts` — Supabase helpers (students, curriculum, homework rows, sent email logging, resend helpers).
 - `app/lib/homeworkEmail.ts` — builds HTML email and completion signature.
-- `app/lib/email.ts` — provider-agnostic mail helper that uses Gmail SMTP by default and can switch to Resend via configuration.
+- `app/lib/email.ts` — provider-agnostic mail helper that uses Brevo SMTP by default and can switch to Gmail SMTP for manual fallback.
 - `app/api/homework/generate-weekly/route.ts` — server route that triggers Claude and saves rows to Supabase.
 - `app/api/cron/generate-weekly/route.ts` — cron trigger route that generates weekly homework directly across active year levels.
 - `app/api/cron/send-homework/route.ts` — cron route that finds today's homework and sends emails to students.
@@ -51,10 +51,11 @@ Set the following in your deployment environment and in `.env` for local testing
 
 - `SUPABASE_URL` — your Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY` — service role key for server operations
-- `MAIL_PROVIDER` — mail provider to use (`gmail` by default, or `resend`)
+- `MAIL_PROVIDER` — mail provider to use (`brevo` by default; set to `gmail` only for manual fallback)
+- `BREVO_SMTP_LOGIN` — Brevo SMTP login
+- `BREVO_SMTP_KEY` — Brevo SMTP key
 - `GMAIL_USER` — Gmail account used for SMTP delivery
 - `GMAIL_APP_PASSWORD` — Gmail app password for SMTP auth
-- `RESEND_API_KEY` — your Resend API key (required if `MAIL_PROVIDER=resend`)
 - `MAILERLITE_API_KEY` — MailerLite API key used to sync each new signup as a subscriber
 - `MAILERLITE_GROUP_ID` or `MAILERLITE_GROUP_IDS` — optional MailerLite group id (or comma-separated ids) used when adding subscribers
 - `FROM_EMAIL` — sender email (used in the `From` field)

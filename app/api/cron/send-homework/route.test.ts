@@ -74,7 +74,7 @@ beforeEach(() => {
     ok: true,
     status: 200,
     body: { id: "test-email" },
-    provider: "resend",
+    provider: "brevo",
   });
 });
 
@@ -172,7 +172,7 @@ describe("POST /api/cron/send-homework", () => {
       ok: false,
       status: 400,
       body: { error: "Rejected" },
-      provider: "resend",
+      provider: "brevo",
     });
 
     const response = await POST(mondayRequest());

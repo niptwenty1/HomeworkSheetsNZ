@@ -1,5 +1,4 @@
 import nodemailer from "nodemailer";
-import { Resend } from "resend";
 
 export interface EmailSendOptions {
   to: string;
@@ -13,10 +12,10 @@ export interface EmailSendResult {
   ok: boolean;
   status: number;
   body: unknown;
-  provider: "gmail" | "resend";
+  provider: "brevo" | "gmail";
 }
 
-type MailProvider = "gmail" | "resend";
+type MailProvider = "brevo" | "gmail";
 
 function escapeDisplayName(value: string) {
   return value.replace(/"/g, "").trim();
@@ -30,7 +29,7 @@ function buildFromAddress(baseAddress: string) {
 
 function getConfiguredProvider(): MailProvider {
   const configuredProvider = process.env.MAIL_PROVIDER?.toLowerCase();
-  return configuredProvider === "resend" ? "resend" : "gmail";
+  return configuredProvider === "gmail" ? "gmail" : "brevo";
 }
 
 async function sendWithGmail(options: EmailSendOptions): Promise<EmailSendResult> {
@@ -73,11 +72,12 @@ async function sendWithGmail(options: EmailSendOptions): Promise<EmailSendResult
   };
 }
 
-async function sendWithResendProvider(options: EmailSendOptions): Promise<EmailSendResult> {
-  const resend = new Resend(process.env.RESEND_API_KEY || "");
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error("RESEND_API_KEY is not configured");
+async function sendWithBrevo(options: EmailSendOptions): Promise<EmailSendResult> {
+  const login = process.env.BREVO_SMTP_LOGIN;
+  const key = process.env.BREVO_SMTP_KEY;
+
+  if (!login || !key) {
+    throw new Error("BREVO_SMTP_LOGIN and BREVO_SMTP_KEY must be configured");
   }
 
   const rawFromAddress = options.from || process.env.FROM_EMAIL;
@@ -86,29 +86,41 @@ async function sendWithResendProvider(options: EmailSendOptions): Promise<EmailS
   }
   const fromAddress = buildFromAddress(rawFromAddress);
 
-  const payload = {
+  const transporter = nodemailer.createTransport({
+    host: "smtp-relay.brevo.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: login,
+      pass: key,
+    },
+  });
+
+  const info = await transporter.sendMail({
     from: fromAddress,
     to: options.to,
     subject: options.subject,
     html: options.html,
-    reply_to: options.replyTo,
-  };
-
-  const response = await resend.emails.send(payload);
+    replyTo: options.replyTo || process.env.REPLY_TO_EMAIL || undefined,
+  });
 
   return {
-    ok: !response.error,
-    status: response.error ? 400 : 200,
-    body: response,
-    provider: "resend",
+    ok: true,
+    status: 200,
+    body: {
+      messageId: info.messageId,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    },
+    provider: "brevo",
   };
 }
 
 export async function sendHomeworkEmail(options: EmailSendOptions): Promise<EmailSendResult> {
   const provider = getConfiguredProvider();
 
-  if (provider === "resend") {
-    return sendWithResendProvider(options);
+  if (provider === "brevo") {
+    return sendWithBrevo(options);
   }
 
   return sendWithGmail(options);
