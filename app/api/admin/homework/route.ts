@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("homework_entries")
-    .select("id, date, day, maths_topic, maths_questions, reading_title, reading_questions, writing_type, writing_prompt, grammar_topic, grammar_exercise, year_level, generated_at, created_at")
+    .select("id, date, day, maths_topic, maths_instructions, maths_questions, maths_word_problem, reading_title, reading_text, reading_questions, writing_type, writing_prompt, writing_word_count, grammar_topic, grammar_instruction, grammar_exercise, year_level, generated_at, created_at")
     .gte("date", start.toISOString().slice(0, 10))
     .lte("date", end.toISOString().slice(0, 10))
     .order("date", { ascending: true })
