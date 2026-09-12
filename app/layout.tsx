@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Instagram } from "lucide-react";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import SiteHeader from "./SiteHeader";
 import "./globals.css";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
 }>) {
   const instagramHandle = "homeworksheetsnz";
   const instagramUrl = `https://www.instagram.com/${instagramHandle}`;
+  const gaId = process.env.NEXT_PUBLIC_GA_ID;
 
   return (
     <html lang="en-NZ">
@@ -77,6 +79,7 @@ export default function RootLayout({
           </div>
         </footer>
       </body>
+      {gaId && <GoogleAnalytics gaId={gaId} />}
     </html>
   );
 }
