@@ -7,16 +7,26 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://homeworksheets.co.nz"),
-  title: "HomeWorkSheets | Weekly Learning Plans for NZ Parents",
+  title: "HomeWorkSheets | NZ Curriculum Worksheets & Homework Plans",
   description:
-    "NZ curriculum-aligned worksheets delivered straight to your inbox, helping your child build confidence through consistent practice without adding to your mental load.",
+    "NZ curriculum-aligned maths, English, reading, writing, and grammar worksheets for Years 1–10. Simple weekly homework sheets for NZ kids and parents.",
+  keywords: [
+    "home work sheets",
+    "homework sheets NZ",
+    "NZ curriculum worksheets",
+    "maths worksheets NZ",
+    "English worksheets NZ",
+    "kids learning NZ",
+    "primary school homework NZ",
+    "reading comprehension worksheets NZ",
+  ],
   applicationName: "HomeWorkSheets",
   authors: [{ name: "HomeWorkSheets" }],
   creator: "HomeWorkSheets",
   openGraph: {
-    title: "HomeWork Sheets | Weekly Learning Plans for NZ Parents",
+    title: "HomeWorkSheets | NZ Curriculum Worksheets & Homework Plans",
     description:
-      "NZ curriculum-aligned worksheets delivered straight to your inbox, helping your child build confidence through consistent practice without adding to your mental load.",
+      "NZ curriculum-aligned maths, English, reading, writing, and grammar worksheets for Years 1–10. Simple weekly homework sheets for NZ kids and parents.",
     type: "website",
     locale: "en_NZ",
     images: [
