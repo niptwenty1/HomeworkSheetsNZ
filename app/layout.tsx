@@ -5,7 +5,7 @@ import SiteHeader from "./SiteHeader";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://homework-app.co.nz"),
+  metadataBase: new URL("https://homeworksheets.co.nz"),
   title: "HomeWorkSheets | Weekly Learning Plans for NZ Parents",
   description:
     "NZ curriculum-aligned worksheets delivered straight to your inbox, helping your child build confidence through consistent practice without adding to your mental load.",
