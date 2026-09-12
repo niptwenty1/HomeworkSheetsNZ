@@ -1,7 +1,7 @@
 import { sendHomeworkEmail } from "./email";
 import { sendTelegramMessage } from "./telegram";
 
-type CronSummaryKind = "send-homework" | "generate-weekly";
+type CronSummaryKind = "send-homework" | "generate-weekly" | "process-resends";
 
 export type CronSummaryEmailInput = {
   kind: CronSummaryKind;
@@ -40,6 +40,10 @@ function escapeHtml(value: string | number | null | undefined) {
 function buildSummarySubject(input: CronSummaryEmailInput) {
   if (input.kind === "send-homework") {
     return `[HomeWorksheets] Homework send summary - ${input.targetDate}`;
+  }
+
+  if (input.kind === "process-resends") {
+    return `[HomeWorksheets] Resend processing summary - ${input.targetDate}`;
   }
 
   return `[HomeWorksheets] Homework generation ${input.status} - Year ${input.yearLevel || "?"} - ${input.referenceDate || input.targetDate}`;

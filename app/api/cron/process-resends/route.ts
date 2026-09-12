@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStudentsMarkedForResend, getStudentById, getSupabaseHomeworkForDate, clearResendFlagById, logSentEmail } from "../../../lib/supabaseHomeworkData";
 import { buildHomeworkEmailPayload } from "../../../lib/homeworkEmail";
 import sendHomeworkEmail from "../../../lib/email";
+import { sendCronSummaryEmail } from "../../../lib/cronSummaryEmail";
 
 function verifySecretHeader(headerValue: string | null, secret: string) {
   if (!headerValue) return false;
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   }
 
   const pending = await getStudentsMarkedForResend();
-  const results: Array<{ id?: number; email: string; status: string }> = [];
+  const results: Array<{ id?: number; email: string; name?: string; status: string }> = [];
 
   for (const req of pending) {
     try {
@@ -71,13 +72,35 @@ export async function POST(request: Request) {
       await logSentEmail({ email: student.email, name: student.child_name, year: student.year_level, date: String(req.resend_date || ""), status: sendResult.ok ? "sent" : "failed", providerResponse: sendResult.body });
 
       await clearResendFlagById(Number(req.id));
-      results.push({ id: Number(req.id), email: String(req.email || ""), status: sendResult.ok ? "sent" : "failed" });
+      results.push({ id: Number(req.id), email: String(req.email || ""), name: student.child_name, status: sendResult.ok ? "sent" : "failed" });
     } catch (error: unknown) {
       await clearResendFlagById(Number(req.id));
       results.push({ id: Number(req.id), email: String(req.email || ""), status: "error" });
       console.error("Failed to process resend request", error);
     }
   }
+
+  const sentResults = results.filter((r) => r.status === "sent");
+  const failedResults = results.filter((r) => r.status !== "sent");
+  const targetDate = new Date().toISOString().slice(0, 10);
+
+  await sendCronSummaryEmail({
+    kind: "process-resends",
+    targetDate,
+    status: results.length === 0 ? "skipped" : failedResults.length === 0 ? "success" : "partial-failure",
+    counts: {
+      total: results.length,
+      sent: sentResults.length,
+      failed: failedResults.length,
+    },
+    details:
+      results.length === 0
+        ? ["No pending resends to process"]
+        : [
+            ...sentResults.map((r) => `Sent: ${r.name || "Unknown"} (${r.email})`),
+            ...failedResults.map((r) => `${r.status}: ${r.name || "Unknown"} (${r.email})`),
+          ],
+  });
 
   return NextResponse.json({ ok: true, processed: results.length, results });
 }

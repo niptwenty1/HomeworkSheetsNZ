@@ -5,6 +5,10 @@ import { usePathname } from "next/navigation";
 
 export default function SiteHeader() {
   const pathname = usePathname();
+  if (pathname.startsWith("/admin")) {
+    return null;
+  }
+
   const isSpyAcademy = pathname === "/spy-academy";
   const isHome = pathname === "/";
   const baseButtonClass =
