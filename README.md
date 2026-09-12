@@ -74,6 +74,7 @@ Set the following in your deployment environment and in `.env` for local testing
 - `CLAUDE_API_KEY` (or `ANTHROPIC_API_KEY`) — Claude / Anthropic API key
 - `CLAUDE_MODEL` and `CLAUDE_MAX_TOKENS` — optional model/tokens settings
 - `MAX_TOKENS` — fallback token limit if `CLAUDE_MAX_TOKENS` is not set
+- `NEXT_PUBLIC_GA_ID` — optional Google Analytics 4 Measurement ID (e.g. `G-XXXXXXXXXX`)
 
 ---
 
