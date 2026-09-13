@@ -94,116 +94,138 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const yearLevel = isValidYearLevel(body.yearLevel) ? String(body.yearLevel) : "6";
-    const referenceDate = body.referenceDate ? new Date(String(body.referenceDate)) : new Date();
-    const referenceDateString = referenceDate.toISOString().slice(0, 10);
+    const isAllYears = body.yearLevel === "all";
+    const targetYears = isAllYears
+      ? Array.from({ length: 10 }, (_, index) => String(index + 1))
+      : [isValidYearLevel(body.yearLevel) ? String(body.yearLevel) : "6"];
+
+    const rawRefDate = body.referenceDate ? String(body.referenceDate) : new Date().toISOString().slice(0, 10);
+    const referenceDate = new Date(rawRefDate.includes("T") ? rawRefDate : `${rawRefDate}T12:00:00Z`);
+    const referenceDateString = rawRefDate.slice(0, 10);
+    const force = Boolean(body.force);
 
     const schoolDays = getSchoolDaysInWeek(referenceDate);
     const dayDates = schoolDays.map((day) => day.dateStr);
     const supabase = getSupabaseServerClient();
 
-    const { data: existingRows, error: existingError } = await supabase
-      .from("homework_entries")
-      .select("date")
-      .eq("year_level", yearLevel)
-      .in("date", dayDates);
+    let totalGenerated = 0;
+    let totalSkipped = 0;
 
-    if (existingError) {
-      return NextResponse.json({ ok: false, error: existingError.message }, { status: 500 });
-    }
+    for (const yearLevel of targetYears) {
+      let missingDays = schoolDays;
 
-    const existingDates = new Set((existingRows || []).map((row) => String(row.date || "")));
-    const missingDays = schoolDays.filter((day) => !existingDates.has(day.dateStr));
+      if (!force) {
+        const { data: existingRows, error: existingError } = await supabase
+          .from("homework_entries")
+          .select("date")
+          .eq("year_level", yearLevel)
+          .in("date", dayDates);
 
-    if (missingDays.length === 0) {
+        if (existingError) {
+          return NextResponse.json({ ok: false, error: existingError.message }, { status: 500 });
+        }
+
+        const existingDates = new Set((existingRows || []).map((row) => String(row.date || "")));
+        missingDays = schoolDays.filter((day) => !existingDates.has(day.dateStr));
+      }
+
+      if (missingDays.length === 0) {
+        totalSkipped += 1;
+        await supabase.from("claude_usage_logs").insert([
+          {
+            source_route: "/api/admin/homework",
+            year_level: yearLevel,
+            reference_date: referenceDateString,
+            generated_rows: 0,
+            school_days_count: schoolDays.length,
+            status: "skipped-existing",
+            error_message: null,
+            input_tokens: 0,
+            output_tokens: 0,
+            total_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            billed_input_estimate: 0,
+            model: null,
+            max_tokens: null,
+          },
+        ]);
+        continue;
+      }
+
+      const [curriculumContent, recentTopics, students] = await Promise.all([
+        getSupabaseCurriculumContent(yearLevel),
+        getSupabaseRecentHomeworkTopics(yearLevel, referenceDate),
+        getSupabaseStudents(),
+      ]);
+
+      const { entries: generatedHomework, usage } = await generateWeeklyHomeworkWithUsage({
+        yearLevel,
+        schoolDays: missingDays,
+        curriculumContent,
+        recentTopics,
+        students,
+      });
+
+      const rows = generatedHomework.map((entry) => ({
+        date: missingDays.find((day) => day.date === entry.date)?.dateStr || null,
+        day: entry.date.split(" ")[0],
+        maths_topic: entry.maths.topic,
+        maths_instructions: entry.maths.instructions,
+        maths_questions: entry.maths.questions,
+        maths_word_problem: entry.maths.word_problem,
+        reading_title: entry.english.reading_passage.title,
+        reading_text: entry.english.reading_passage.text,
+        reading_questions: entry.english.reading_passage.questions,
+        writing_type: entry.english.writing_task.type,
+        writing_prompt: entry.english.writing_task.prompt,
+        writing_word_count: entry.english.writing_task.word_count,
+        grammar_topic: entry.english.grammar_focus.topic,
+        grammar_instruction: entry.english.grammar_focus.instruction,
+        grammar_exercise: entry.english.grammar_focus.exercise,
+        year_level: yearLevel,
+        generated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      }));
+
+      const { error } = await supabase.from("homework_entries").upsert(rows, {
+        onConflict: "date,year_level",
+        ignoreDuplicates: false,
+      });
+
+      if (error) {
+        return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
+      }
+
+      totalGenerated += rows.length;
+
       await supabase.from("claude_usage_logs").insert([
         {
           source_route: "/api/admin/homework",
           year_level: yearLevel,
           reference_date: referenceDateString,
-          generated_rows: 0,
-          school_days_count: schoolDays.length,
-          status: "skipped-existing",
+          generated_rows: rows.length,
+          school_days_count: missingDays.length,
+          status: "generated",
           error_message: null,
-          input_tokens: 0,
-          output_tokens: 0,
-          total_tokens: 0,
-          cache_read_input_tokens: 0,
-          cache_creation_input_tokens: 0,
-          billed_input_estimate: 0,
-          model: null,
-          max_tokens: null,
+          input_tokens: usage.inputTokens,
+          output_tokens: usage.outputTokens,
+          total_tokens: usage.totalTokens,
+          cache_read_input_tokens: usage.cacheReadInputTokens,
+          cache_creation_input_tokens: usage.cacheCreationInputTokens,
+          billed_input_estimate: usage.billedInputEstimate,
+          model: usage.model,
+          max_tokens: usage.maxTokens,
         },
       ]);
-
-      return NextResponse.json({ ok: true, count: 0, skipped: true });
     }
 
-    const [curriculumContent, recentTopics, students] = await Promise.all([
-      getSupabaseCurriculumContent(yearLevel),
-      getSupabaseRecentHomeworkTopics(yearLevel, referenceDate),
-      getSupabaseStudents(),
-    ]);
-
-    const { entries: generatedHomework, usage } = await generateWeeklyHomeworkWithUsage({
-      yearLevel,
-      schoolDays: missingDays,
-      curriculumContent,
-      recentTopics,
-      students,
+    return NextResponse.json({
+      ok: true,
+      count: totalGenerated,
+      skipped: totalSkipped > 0 && totalGenerated === 0,
+      skippedCount: totalSkipped,
     });
-
-    const rows = generatedHomework.map((entry) => ({
-      date: missingDays.find((day) => day.date === entry.date)?.dateStr || null,
-      day: entry.date.split(" ")[0],
-      maths_topic: entry.maths.topic,
-      maths_instructions: entry.maths.instructions,
-      maths_questions: entry.maths.questions,
-      maths_word_problem: entry.maths.word_problem,
-      reading_title: entry.english.reading_passage.title,
-      reading_text: entry.english.reading_passage.text,
-      reading_questions: entry.english.reading_passage.questions,
-      writing_type: entry.english.writing_task.type,
-      writing_prompt: entry.english.writing_task.prompt,
-      writing_word_count: entry.english.writing_task.word_count,
-      grammar_topic: entry.english.grammar_focus.topic,
-      grammar_instruction: entry.english.grammar_focus.instruction,
-      grammar_exercise: entry.english.grammar_focus.exercise,
-      year_level: yearLevel,
-      generated_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    }));
-
-    const { error } = await supabase.from("homework_entries").upsert(rows, {
-      onConflict: "date,year_level",
-      ignoreDuplicates: false,
-    });
-
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
-    }
-
-    await supabase.from("claude_usage_logs").insert([
-      {
-        source_route: "/api/admin/homework",
-        year_level: yearLevel,
-        reference_date: referenceDateString,
-        generated_rows: rows.length,
-        school_days_count: missingDays.length,
-        status: "generated",
-        error_message: null,
-        input_tokens: usage.inputTokens,
-        output_tokens: usage.outputTokens,
-        total_tokens: usage.totalTokens,
-        cache_read_input_tokens: usage.cacheReadInputTokens,
-        cache_creation_input_tokens: usage.cacheCreationInputTokens,
-        billed_input_estimate: usage.billedInputEstimate,
-        model: usage.model,
-        max_tokens: usage.maxTokens,
-      },
-    ]);
-
-    return NextResponse.json({ ok: true, count: rows.length });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to generate homework";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

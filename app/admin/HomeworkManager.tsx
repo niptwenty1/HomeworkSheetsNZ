@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronRight, RefreshCw, X } from "lucide-react";
+import { Calendar, ChevronRight, RefreshCw, Sparkles, X } from "lucide-react";
 
 type HomeworkEntry = {
   id: number;
@@ -72,6 +72,11 @@ export default function HomeworkManager() {
   const [form, setForm] = useState<HomeworkFormState | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [genDate, setGenDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [genYearLevel, setGenYearLevel] = useState("6");
+  const [force, setForce] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
   useEffect(() => {
     void loadHomework(yearLevel);
   }, [yearLevel]);
@@ -87,6 +92,42 @@ export default function HomeworkManager() {
       setStatus(error instanceof Error ? error.message : "Unable to load homework");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setStatus(`Generating homework for Year ${genYearLevel === "all" ? "1-10" : genYearLevel}...`);
+    try {
+      const response = await fetch("/api/admin/homework", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          yearLevel: genYearLevel,
+          referenceDate: genDate,
+          force,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Failed to generate homework");
+      }
+
+      if (result.skipped) {
+        setStatus(`Homework already exists for the week of ${genDate} for Year ${genYearLevel === "all" ? "1-10" : genYearLevel}. Check "Overwrite" if you want to replace it.`);
+      } else {
+        setStatus(`Successfully generated ${result.count} homework entries for week of ${genDate}.`);
+        if (genYearLevel !== "all") {
+          setYearLevel(genYearLevel);
+          await loadHomework(genYearLevel);
+        } else {
+          await loadHomework(yearLevel);
+        }
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to generate homework");
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -148,6 +189,74 @@ export default function HomeworkManager() {
         {status && <p className="mb-5 rounded-xl bg-[#f5c666]/25 px-3 py-2 text-sm font-semibold">{status}</p>}
 
         <section className="tactile-panel rounded-[26px] p-5 sm:p-6">
+          <div className="mb-6 rounded-2xl border border-[#eadfce] bg-[#fff8eb] p-4 sm:p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-black text-[#2a2722]">
+                  <Sparkles size={16} className="text-[#eea38c]" />
+                  Generate Weekly Homework
+                </h3>
+                <p className="mt-0.5 text-xs text-[#6d6255]">
+                  Select a reference date and year level to generate a week of homework entries.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex items-center gap-2 rounded-xl border border-[#d9cdbd] bg-white px-3 py-2">
+                  <Calendar size={15} className="text-[#6d6255]" />
+                  <input
+                    type="date"
+                    value={genDate}
+                    onChange={(event) => setGenDate(event.target.value)}
+                    className="bg-transparent text-xs font-bold text-[#2a2722] outline-none"
+                    title="Select reference date"
+                  />
+                </div>
+
+                <select
+                  value={genYearLevel}
+                  onChange={(event) => setGenYearLevel(event.target.value)}
+                  className="rounded-xl border border-[#d9cdbd] bg-white px-3 py-2 text-xs font-bold text-[#2a2722] outline-none"
+                  title="Select year level"
+                >
+                  <option value="all">All Years (1–10)</option>
+                  {years.map((value) => (
+                    <option key={value} value={value}>Year {value}</option>
+                  ))}
+                </select>
+
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs font-bold text-[#6d6255]">
+                  <input
+                    type="checkbox"
+                    checked={force}
+                    onChange={(event) => setForce(event.target.checked)}
+                    className="rounded border-[#d9cdbd] text-[#eea38c] focus:ring-[#eea38c]"
+                  />
+                  Overwrite
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => void handleGenerate()}
+                  disabled={generating}
+                  className="tactile-button flex items-center gap-2 rounded-xl bg-[#eea38c] px-4 py-2 text-xs font-black text-[#2a2722] transition disabled:opacity-50"
+                >
+                  {generating ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} />
+                      Generate
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-black">Year {yearLevel} homework</h2>
